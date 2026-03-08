@@ -1,0 +1,177 @@
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { supabase } from '../lib/supabase'
+import { getCryptoPrices, getStockPrices, tickerToCoinId } from '../lib/priceService'
+import { formatMoney, pnlColor } from '../lib/formatters'
+
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
+
+export default function Overview() {
+  const [portfolios, setPortfolios] = useState([])
+  const [budget, setBudget] = useState([])
+  const [prices, setPrices] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { fetchAll() }, [])
+
+  async function fetchAll() {
+    setLoading(true)
+    const [{ data: pData }, { data: bData }] = await Promise.all([
+      supabase.from('portfolios').select('*, positions(*, trades(*))').order('created_at', { ascending: true }),
+      supabase.from('budget').select('*'),
+    ])
+    setPortfolios(pData || [])
+    setBudget(bData || [])
+
+    const allPositions = (pData || []).flatMap(p => p.positions || [])
+    const cryptoIds = allPositions.filter(p => p.type === 'crypto').map(p => tickerToCoinId(p.ticker))
+    const stockTickers = allPositions.filter(p => p.type === 'stock').map(p => p.ticker)
+
+    const [cryptoPrices, stockPrices] = await Promise.all([
+      cryptoIds.length ? getCryptoPrices([...new Set(cryptoIds)]) : {},
+      stockTickers.length ? getStockPrices([...new Set(stockTickers)]) : {},
+    ])
+
+    const merged = {}
+    allPositions.forEach(p => {
+      if (p.type === 'crypto') merged[p.ticker] = cryptoPrices[tickerToCoinId(p.ticker)] ?? null
+      else merged[p.ticker] = stockPrices[p.ticker] ?? null
+    })
+    setPrices(merged)
+    setLoading(false)
+  }
+
+  function calcPositionValue(pos) {
+    const trades = pos.trades || []
+    let qty = 0, cost = 0
+    trades.forEach(t => {
+      if (t.type === 'buy') { qty += Number(t.quantity); cost += Number(t.price) * Number(t.quantity) }
+      else { qty -= Number(t.quantity); cost -= Number(t.price) * Number(t.quantity) }
+    })
+    const price = prices[pos.ticker] ?? 0
+    return { value: qty * price, cost, pnl: qty * price - cost }
+  }
+
+  function calcPortfolioValue(p) {
+    return (p.positions || []).reduce((sum, pos) => {
+      const { value } = calcPositionValue(pos)
+      return sum + value
+    }, 0)
+  }
+
+  function calcPortfolioPnl(p) {
+    return (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).pnl, 0)
+  }
+
+  const budgetTotal = budget.reduce((sum, b) => {
+    if (b.currency === 'USD') return sum + Number(b.amount)
+    if (b.currency === 'EUR') return sum + Number(b.amount) * 1.08
+    if (b.currency === 'UAH') return sum + Number(b.amount) / 41.5
+    return sum + Number(b.amount)
+  }, 0)
+
+  const investmentTotal = portfolios.reduce((sum, p) => sum + calcPortfolioValue(p), 0)
+  const totalCapital = budgetTotal + investmentTotal
+  const totalPnl = portfolios.reduce((sum, p) => sum + calcPortfolioPnl(p), 0)
+
+  const pieData = [
+    ...portfolios.map((p, i) => ({ name: p.name, value: Math.max(0, calcPortfolioValue(p)) })),
+    ...(budgetTotal > 0 ? [{ name: 'Бюджет', value: budgetTotal }] : []),
+  ].filter(d => d.value > 0)
+
+  const barData = portfolios.map(p => ({
+    name: p.name,
+    pnl: calcPortfolioPnl(p),
+  }))
+
+  if (loading) return <div className="text-gray-500">Завантаження...</div>
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Огляд</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="text-sm text-gray-500 mb-1">Загальний капітал</div>
+          <div className="text-2xl font-bold text-gray-800">{formatMoney(totalCapital)}</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="text-sm text-gray-500 mb-1">Інвестиції</div>
+          <div className="text-2xl font-bold text-gray-800">{formatMoney(investmentTotal)}</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="text-sm text-gray-500 mb-1">Бюджет (в USD)</div>
+          <div className="text-2xl font-bold text-gray-800">{formatMoney(budgetTotal)}</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="text-sm text-gray-500 mb-1">Загальний P&L</div>
+          <div className={`text-2xl font-bold ${pnlColor(totalPnl)}`}>{formatMoney(totalPnl)}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {pieData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-700 mb-4">Розподіл капіталу</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v) => formatMoney(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {barData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-700 mb-4">P&L по портфелях</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => formatMoney(v)} />
+                <Bar dataKey="pnl" fill="#3B82F6" radius={[4, 4, 0, 0]}>
+                  {barData.map((entry, i) => (
+                    <Cell key={i} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="font-semibold text-gray-700 mb-4">Портфелі</h3>
+        {portfolios.length === 0 ? (
+          <p className="text-gray-500 text-sm">
+            Немає портфелів. <Link to="/portfolios" className="text-blue-600 hover:underline">Створити</Link>
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {portfolios.map(p => {
+              const val = calcPortfolioValue(p)
+              const pnl = calcPortfolioPnl(p)
+              return (
+                <Link key={p.id} to={`/portfolios/${p.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div>
+                    <div className="font-medium text-gray-800">{p.name}</div>
+                    <div className="text-xs text-gray-500">{(p.positions || []).length} позицій</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-medium text-gray-800">{formatMoney(val)}</div>
+                    <div className={`text-xs ${pnlColor(pnl)}`}>{formatMoney(pnl)}</div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
