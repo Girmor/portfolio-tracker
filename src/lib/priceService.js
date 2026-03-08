@@ -77,3 +77,40 @@ export function tickerToCoinId(ticker) {
   const lower = ticker.toLowerCase()
   return CRYPTO_MAP[lower] || lower
 }
+
+export async function searchStocks(query) {
+  const key = import.meta.env.VITE_FINNHUB_KEY
+  if (!key || !query || query.length < 1) return []
+  try {
+    const res = await fetch(
+      `https://finnhub.io/api/v1/search?q=${encodeURIComponent(query)}&token=${key}`
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.result || []).slice(0, 10).map(item => ({
+      ticker: item.symbol,
+      name: item.description,
+      type: item.type || 'Stock',
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function searchCrypto(query) {
+  if (!query || query.length < 1) return []
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.coins || []).slice(0, 10).map(coin => ({
+      ticker: coin.symbol.toUpperCase(),
+      name: coin.name,
+      coinId: coin.id,
+    }))
+  } catch {
+    return []
+  }
+}

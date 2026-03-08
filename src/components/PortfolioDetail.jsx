@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getCryptoPrices, getStockPrices, tickerToCoinId } from '../lib/priceService'
+import { getCryptoPrices, getStockPrices, tickerToCoinId, searchStocks, searchCrypto } from '../lib/priceService'
 import { formatMoney, formatNumber, formatPercent, formatDate, pnlColor } from '../lib/formatters'
 
 export default function PortfolioDetail() {
@@ -14,6 +14,9 @@ export default function PortfolioDetail() {
   const [showAddTrade, setShowAddTrade] = useState(null)
   const [posForm, setPosForm] = useState({ ticker: '', name: '', type: 'stock' })
   const [tradeForm, setTradeForm] = useState({ type: 'buy', price: '', quantity: '', date: '', notes: '' })
+  const [suggestions, setSuggestions] = useState([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -74,6 +77,31 @@ export default function PortfolioDetail() {
     const pnl = marketValue - totalCost
     const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0
     return { totalQty, avgPrice, totalCost, currentPrice, marketValue, pnl, pnlPercent }
+  }
+
+  useEffect(() => {
+    const query = posForm.ticker.trim()
+    if (query.length < 1) { setSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      setSearchLoading(true)
+      const results = posForm.type === 'crypto'
+        ? await searchCrypto(query)
+        : await searchStocks(query)
+      setSuggestions(results)
+      setSearchLoading(false)
+      setShowSuggestions(true)
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [posForm.ticker, posForm.type])
+
+  function selectSuggestion(item) {
+    setPosForm({
+      ...posForm,
+      ticker: item.ticker,
+      name: item.name,
+    })
+    setSuggestions([])
+    setShowSuggestions(false)
   }
 
   async function handleAddPosition(e) {
@@ -165,26 +193,43 @@ export default function PortfolioDetail() {
                 <option value="crypto">Крипто</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Тікер</label>
+            <div className="relative flex-1">
+              <label className="block text-sm text-gray-600 mb-1">Пошук активу</label>
               <input
                 type="text"
                 required
+                autoComplete="off"
                 value={posForm.ticker}
-                onChange={e => setPosForm({ ...posForm, ticker: e.target.value })}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={posForm.type === 'crypto' ? 'BTC' : 'AAPL'}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm text-gray-600 mb-1">Назва</label>
-              <input
-                type="text"
-                value={posForm.name}
-                onChange={e => setPosForm({ ...posForm, name: e.target.value })}
+                onChange={e => { setPosForm({ ...posForm, ticker: e.target.value, name: '' }); setShowSuggestions(true) }}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={posForm.type === 'crypto' ? 'Bitcoin' : 'Apple Inc.'}
+                placeholder={posForm.type === 'crypto' ? 'Введіть назву або тікер (BTC, Ethereum...)' : 'Введіть тікер або назву (AAPL, Tesla...)'}
               />
+              {searchLoading && (
+                <div className="absolute right-3 top-8 text-xs text-gray-400">Пошук...</div>
+              )}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {suggestions.map((item, i) => (
+                    <button
+                      key={`${item.ticker}-${i}`}
+                      type="button"
+                      onMouseDown={() => selectSuggestion(item)}
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between text-sm border-b border-gray-50 last:border-0"
+                    >
+                      <div>
+                        <span className="font-medium text-gray-800">{item.ticker}</span>
+                        <span className="text-gray-500 ml-2">{item.name}</span>
+                      </div>
+                      {item.type && <span className="text-xs text-gray-400">{item.type}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {posForm.name && (
+                <div className="text-xs text-green-600 mt-1">Обрано: {posForm.ticker} — {posForm.name}</div>
+              )}
             </div>
             <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
               Додати
