@@ -278,7 +278,7 @@ export default function PortfolioDetail() {
                     </td>
                     <td className="text-right py-3 px-4">
                       <button
-                        onClick={() => { setShowAddTrade(pos.id); setTradeForm({ type: 'buy', price: '', quantity: '', date: '', notes: '' }) }}
+                        onClick={() => { setShowAddTrade(pos.id); setTradeForm({ type: 'buy', price: prices[pos.ticker] ? String(prices[pos.ticker]) : '', quantity: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
                         className="text-blue-600 hover:text-blue-800 text-xs mr-2"
                       >
                         +Угода
