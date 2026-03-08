@@ -3,6 +3,9 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getCryptoPrices, getStockPrices, tickerToCoinId, searchStocks, searchCrypto } from '../lib/priceService'
 import { formatMoney, formatNumber, formatPercent, formatDate, pnlColor } from '../lib/formatters'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
 export default function PortfolioDetail() {
   const { id } = useParams()
@@ -17,6 +20,8 @@ export default function PortfolioDetail() {
   const [suggestions, setSuggestions] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showCashModal, setShowCashModal] = useState(false)
+  const [cashForm, setCashForm] = useState({ date: new Date().toISOString().split('T')[0], newBalance: '' })
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -138,47 +143,132 @@ export default function PortfolioDetail() {
     fetchData()
   }
 
+  async function handleCashAdjustment(e) {
+    e.preventDefault()
+    const newBalance = Number(cashForm.newBalance)
+    if (isNaN(newBalance) || newBalance < 0) return
+    await supabase
+      .from('portfolios')
+      .update({ cash_balance: newBalance })
+      .eq('id', id)
+    setShowCashModal(false)
+    setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: '' })
+    fetchData()
+  }
+
   if (loading) return <div className="text-gray-500">Завантаження...</div>
   if (!portfolio) return <div className="text-red-500">Портфель не знайдено</div>
 
-  const totalValue = positions.reduce((sum, p) => sum + calcPosition(p).marketValue, 0)
+  const cashBalance = Number(portfolio?.cash_balance) || 0
+  const totalInvestmentValue = positions.reduce((sum, p) => sum + calcPosition(p).marketValue, 0)
+  const totalValue = totalInvestmentValue + cashBalance
   const totalPnl = positions.reduce((sum, p) => sum + calcPosition(p).pnl, 0)
   const totalCost = positions.reduce((sum, p) => sum + calcPosition(p).totalCost, 0)
+  const pnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
+
+  const allocationData = positions
+    .map(pos => {
+      const calc = calcPosition(pos)
+      return { name: pos.ticker, value: Math.max(0, calc.marketValue) }
+    })
+    .filter(d => d.value > 0)
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link to="/portfolios" className="text-gray-400 hover:text-gray-600">← Назад</Link>
         <h2 className="text-2xl font-bold text-gray-800">{portfolio.name}</h2>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Вартість портфеля</div>
-          <div className="text-2xl font-bold text-gray-800">{formatMoney(totalValue)}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Інвестовано</div>
-          <div className="text-2xl font-bold text-gray-800">{formatMoney(totalCost)}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">P&L</div>
-          <div className={`text-2xl font-bold ${pnlColor(totalPnl)}`}>
-            {formatMoney(totalPnl)} ({formatPercent(totalCost > 0 ? (totalPnl / totalCost) * 100 : 0)})
+      {/* Stats Cards + Allocation Pie */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Left: Stats */}
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+          {/* Card 1: Portfolio Value + Cash */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="text-sm text-gray-500 mb-1">Вартість портфеля</div>
+            <div className="text-2xl font-bold text-gray-800">{formatMoney(totalValue)}</div>
+            <div className="flex items-center gap-3 mt-2">
+              <span className="text-sm text-gray-500">Готівка: {formatMoney(cashBalance)}</span>
+              <button
+                onClick={() => {
+                  setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
+                  setShowCashModal(true)
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium border border-blue-200 rounded-md px-2 py-0.5"
+              >
+                Коригування
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Invested */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="text-sm text-gray-500 mb-1">Інвестовано</div>
+            <div className="text-2xl font-bold text-gray-800">{formatMoney(totalCost)}</div>
+          </div>
+
+          {/* Card 3: Unrealized P&L */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 col-span-2">
+            <div className="text-sm text-gray-500 mb-1">Нереалізований P&L</div>
+            <div className={`text-2xl font-bold ${pnlColor(totalPnl)}`}>
+              {formatMoney(totalPnl)} ({formatPercent(pnlPercent)})
+            </div>
           </div>
         </div>
+
+        {/* Right: Allocation Pie Chart */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="text-sm font-semibold text-gray-700 mb-2">Алокація</div>
+          {allocationData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={allocationData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                >
+                  {allocationData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => formatMoney(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">Немає даних</div>
+          )}
+        </div>
       </div>
 
+      {/* Holdings Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-700">Позиції</h3>
-        <button
-          onClick={() => setShowAddPosition(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-        >
-          + Додати позицію
-        </button>
+        <h3 className="text-lg font-semibold text-gray-700">Холдинги</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
+              setShowCashModal(true)
+            }}
+            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+          >
+            Коригування
+          </button>
+          <button
+            onClick={() => setShowAddPosition(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          >
+            + Додати позицію
+          </button>
+        </div>
       </div>
 
+      {/* Add Position Form */}
       {showAddPosition && (
         <form onSubmit={handleAddPosition} className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
           <div className="flex gap-3 items-end">
@@ -241,42 +331,57 @@ export default function PortfolioDetail() {
         </form>
       )}
 
+      {/* Holdings Table */}
       {positions.length === 0 ? (
         <p className="text-gray-500 text-center py-8">Додайте першу позицію</p>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Актив</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Кількість</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Сер. ціна</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Поточна ціна</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Вартість</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">P&L</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Дії</th>
+                <th className="text-left py-3 px-3 font-medium text-gray-600">Назва</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Кількість</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Ціна</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">% Зміна</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Сер. ціна</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Інвестовано</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Ринкова вар.</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Нереаліз. P&L</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Нереаліз. %</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Алокація</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Дії</th>
               </tr>
             </thead>
             <tbody>
               {positions.map(pos => {
                 const calc = calcPosition(pos)
+                const allocation = totalInvestmentValue > 0
+                  ? (calc.marketValue / totalInvestmentValue) * 100
+                  : 0
                 return (
                   <tr key={pos.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-3">
                       <div className="font-medium text-gray-800">{pos.ticker}</div>
-                      <div className="text-xs text-gray-500">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
+                      <div className="text-xs text-gray-500 truncate max-w-[140px]">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
                     </td>
-                    <td className="text-right py-3 px-4 text-gray-700">{formatNumber(calc.totalQty, 4)}</td>
-                    <td className="text-right py-3 px-4 text-gray-700">{formatMoney(calc.avgPrice)}</td>
-                    <td className="text-right py-3 px-4 text-gray-700">
-                      {calc.currentPrice ? formatMoney(calc.currentPrice) : '—'}
+                    <td className="text-right py-3 px-3 text-gray-700">{formatNumber(calc.totalQty, 4)}</td>
+                    <td className="text-right py-3 px-3 text-gray-700">
+                      {calc.currentPrice ? formatMoney(calc.currentPrice) : '---'}
                     </td>
-                    <td className="text-right py-3 px-4 font-medium text-gray-800">{formatMoney(calc.marketValue)}</td>
-                    <td className={`text-right py-3 px-4 font-medium ${pnlColor(calc.pnl)}`}>
-                      {formatMoney(calc.pnl)}<br/>
-                      <span className="text-xs">{formatPercent(calc.pnlPercent)}</span>
+                    <td className="text-right py-3 px-3 text-gray-400">---</td>
+                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.avgPrice)}</td>
+                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.totalCost)}</td>
+                    <td className="text-right py-3 px-3 font-medium text-gray-800">{formatMoney(calc.marketValue)}</td>
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.pnl)}`}>
+                      {formatMoney(calc.pnl)}
                     </td>
-                    <td className="text-right py-3 px-4">
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.pnlPercent)}`}>
+                      {formatPercent(calc.pnlPercent)}
+                    </td>
+                    <td className="text-right py-3 px-3 text-gray-700">
+                      {allocation.toFixed(2)}%
+                    </td>
+                    <td className="text-right py-3 px-3 whitespace-nowrap">
                       <button
                         onClick={() => { setShowAddTrade(pos.id); setTradeForm({ type: 'buy', price: prices[pos.ticker] ? String(prices[pos.ticker]) : '', quantity: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
                         className="text-blue-600 hover:text-blue-800 text-xs mr-2"
@@ -294,10 +399,27 @@ export default function PortfolioDetail() {
                 )
               })}
             </tbody>
+            {/* Table Footer: Totals */}
+            <tfoot>
+              <tr className="border-t-2 border-gray-300 bg-gray-50 font-medium">
+                <td className="py-3 px-3 text-gray-800">Всього</td>
+                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3 text-gray-800">{formatMoney(totalCost)}</td>
+                <td className="text-right py-3 px-3 text-gray-800">{formatMoney(totalInvestmentValue)}</td>
+                <td className={`text-right py-3 px-3 ${pnlColor(totalPnl)}`}>{formatMoney(totalPnl)}</td>
+                <td className={`text-right py-3 px-3 ${pnlColor(pnlPercent)}`}>{formatPercent(pnlPercent)}</td>
+                <td className="text-right py-3 px-3 text-gray-800">100%</td>
+                <td className="text-right py-3 px-3"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
 
+      {/* Trade Modal */}
       {showAddTrade && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <form onSubmit={handleAddTrade} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
@@ -364,6 +486,62 @@ export default function PortfolioDetail() {
               </button>
               <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
                 Додати угоду
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Cash Adjustment Modal */}
+      {showCashModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <form onSubmit={handleCashAdjustment} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
+            <h3 className="font-semibold text-gray-800 mb-4">Коригування готівки</h3>
+
+            <div className="mb-3">
+              <label className="block text-sm text-gray-600 mb-1">Дата</label>
+              <input
+                type="date"
+                value={cashForm.date}
+                onChange={e => setCashForm({ ...cashForm, date: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-sm text-gray-600 mb-1">Поточний баланс</label>
+              <div className="text-lg font-semibold text-gray-800 bg-gray-50 rounded-lg px-3 py-2">
+                {formatMoney(Number(portfolio?.cash_balance) || 0)}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm text-gray-600 mb-1">Новий баланс</label>
+              <input
+                type="number"
+                step="any"
+                required
+                min="0"
+                value={cashForm.newBalance}
+                onChange={e => setCashForm({ ...cashForm, newBalance: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCashModal(false)}
+                className="text-gray-500 px-4 py-2 text-sm"
+              >
+                Скасувати
+              </button>
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Зберегти
               </button>
             </div>
           </form>
