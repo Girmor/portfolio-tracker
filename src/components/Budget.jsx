@@ -10,6 +10,7 @@ export default function Budget() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ label: '', currency: 'UAH', amount: '' })
+  const [error, setError] = useState(null)
 
   useEffect(() => { fetchBudget() }, [])
 
@@ -22,11 +23,17 @@ export default function Budget() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    setError(null)
     const payload = { label: form.label, currency: form.currency, amount: Number(form.amount), updated_at: new Date().toISOString() }
+    let result
     if (editingId) {
-      await supabase.from('budget').update(payload).eq('id', editingId)
+      result = await supabase.from('budget').update(payload).eq('id', editingId)
     } else {
-      await supabase.from('budget').insert(payload)
+      result = await supabase.from('budget').insert(payload)
+    }
+    if (result.error) {
+      setError(result.error.message)
+      return
     }
     resetForm()
     fetchBudget()
@@ -86,6 +93,13 @@ export default function Budget() {
         </button>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 mb-4 flex items-center justify-between">
+          <span>❌ {error}</span>
+          <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800 text-sm">✕</button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <div className="text-sm text-gray-500 mb-1">Загальний бюджет (в USD)</div>
         <div className="text-2xl font-bold text-gray-800">{formatMoney(totalUsd)}</div>
@@ -98,7 +112,7 @@ export default function Budget() {
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-3">{editingId ? 'Редагувати' : 'Нова картка'}</h3>
+          <h3 className="font-semibold text-gray-700 mb-3">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
           <div className="flex gap-3 items-end">
             <div className="flex-1">
               <label className="block text-sm text-gray-600 mb-1">Назва</label>
@@ -174,8 +188,8 @@ export default function Budget() {
 
       {items.length === 0 && (
         <div className="text-center py-12 text-gray-500">
-          <p className="text-lg mb-2">Немає карток бюджету</p>
-          <p className="text-sm">Додайте картки для відстеження готівки та балансів</p>
+          <p className="text-lg mb-2">Немає рахунків</p>
+          <p className="text-sm">Додайте рахунки для відстеження готівки та балансів</p>
         </div>
       )}
     </div>
