@@ -15,7 +15,7 @@ export default function PortfolioDetail() {
   const [loading, setLoading] = useState(true)
   const [showAddPosition, setShowAddPosition] = useState(false)
   const [showAddTrade, setShowAddTrade] = useState(null)
-  const [posForm, setPosForm] = useState({ ticker: '', name: '', type: 'stock' })
+  const [posForm, setPosForm] = useState({ ticker: '', name: '', type: 'stock', coinId: '' })
   const [tradeForm, setTradeForm] = useState({ type: 'buy', price: '', quantity: '', date: '', notes: '' })
   const [suggestions, setSuggestions] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
@@ -35,8 +35,12 @@ export default function PortfolioDetail() {
     setLoading(false)
   }, [id])
 
+  function getCoinId(pos) {
+    return pos.coin_id || tickerToCoinId(pos.ticker)
+  }
+
   async function fetchPrices(positions) {
-    const cryptoTickers = positions.filter(p => p.type === 'crypto').map(p => tickerToCoinId(p.ticker))
+    const cryptoTickers = positions.filter(p => p.type === 'crypto').map(p => getCoinId(p))
     const stockTickers = positions.filter(p => p.type === 'stock').map(p => p.ticker)
 
     const [cryptoPrices, stockPrices] = await Promise.all([
@@ -47,7 +51,7 @@ export default function PortfolioDetail() {
     const merged = {}
     positions.forEach(p => {
       if (p.type === 'crypto') {
-        merged[p.ticker] = cryptoPrices[tickerToCoinId(p.ticker)] ?? null
+        merged[p.ticker] = cryptoPrices[getCoinId(p)] ?? null
       } else {
         merged[p.ticker] = stockPrices[p.ticker] ?? null
       }
@@ -65,23 +69,38 @@ export default function PortfolioDetail() {
 
   function calcPosition(pos) {
     const trades = pos.trades || []
-    let totalQty = 0
-    let totalCost = 0
+    let totalBuyQty = 0, totalBuyCost = 0
+    let totalSellQty = 0, totalSellProceeds = 0
     trades.forEach(t => {
+      const qty = Number(t.quantity)
+      const price = Number(t.price)
       if (t.type === 'buy') {
-        totalQty += Number(t.quantity)
-        totalCost += Number(t.price) * Number(t.quantity)
+        totalBuyQty += qty
+        totalBuyCost += price * qty
       } else {
-        totalQty -= Number(t.quantity)
-        totalCost -= Number(t.price) * Number(t.quantity)
+        totalSellQty += qty
+        totalSellProceeds += price * qty
       }
     })
-    const avgPrice = totalQty > 0 ? totalCost / totalQty : 0
+    const avgPrice = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0
+    const remainingQty = totalBuyQty - totalSellQty
+    const investedRemaining = avgPrice * remainingQty
     const currentPrice = prices[pos.ticker] ?? 0
-    const marketValue = totalQty * currentPrice
-    const pnl = marketValue - totalCost
-    const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0
-    return { totalQty, avgPrice, totalCost, currentPrice, marketValue, pnl, pnlPercent }
+    const marketValue = remainingQty * currentPrice
+
+    const realizedPnl = totalSellQty > 0 ? totalSellProceeds - (avgPrice * totalSellQty) : 0
+    const realizedCost = avgPrice * totalSellQty
+    const realizedPnlPercent = realizedCost > 0 ? (realizedPnl / realizedCost) * 100 : 0
+
+    const unrealizedPnl = marketValue - investedRemaining
+    const unrealizedPnlPercent = investedRemaining > 0 ? (unrealizedPnl / investedRemaining) * 100 : 0
+
+    return {
+      totalQty: remainingQty, avgPrice, totalCost: investedRemaining,
+      currentPrice, marketValue,
+      unrealizedPnl, unrealizedPnlPercent,
+      realizedPnl, realizedPnlPercent,
+    }
   }
 
   useEffect(() => {
@@ -104,6 +123,7 @@ export default function PortfolioDetail() {
       ...posForm,
       ticker: item.ticker,
       name: item.name,
+      coinId: item.coinId || '',
     })
     setSuggestions([])
     setShowSuggestions(false)
@@ -112,11 +132,13 @@ export default function PortfolioDetail() {
   async function handleAddPosition(e) {
     e.preventDefault()
     await supabase.from('positions').insert({
-      ...posForm,
       ticker: posForm.ticker.toUpperCase(),
+      name: posForm.name,
+      type: posForm.type,
+      coin_id: posForm.coinId || null,
       portfolio_id: id,
     })
-    setPosForm({ ticker: '', name: '', type: 'stock' })
+    setPosForm({ ticker: '', name: '', type: 'stock', coinId: '' })
     setShowAddPosition(false)
     fetchData()
   }
@@ -166,17 +188,16 @@ export default function PortfolioDetail() {
   if (!portfolio) return <div className="text-red-500">Портфель не знайдено</div>
 
   const cashBalance = Number(portfolio?.cash_balance) || 0
-  const totalInvestmentValue = positions.reduce((sum, p) => sum + calcPosition(p).marketValue, 0)
+  const posCalcs = positions.map(p => ({ pos: p, calc: calcPosition(p) }))
+  const totalInvestmentValue = posCalcs.reduce((sum, { calc }) => sum + calc.marketValue, 0)
   const totalValue = totalInvestmentValue + cashBalance
-  const totalPnl = positions.reduce((sum, p) => sum + calcPosition(p).pnl, 0)
-  const totalCost = positions.reduce((sum, p) => sum + calcPosition(p).totalCost, 0)
-  const pnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
+  const totalCost = posCalcs.reduce((sum, { calc }) => sum + calc.totalCost, 0)
+  const totalUnrealizedPnl = posCalcs.reduce((sum, { calc }) => sum + calc.unrealizedPnl, 0)
+  const totalRealizedPnl = posCalcs.reduce((sum, { calc }) => sum + calc.realizedPnl, 0)
+  const unrealizedPnlPercent = totalCost > 0 ? (totalUnrealizedPnl / totalCost) * 100 : 0
 
-  const allocationData = positions
-    .map(pos => {
-      const calc = calcPosition(pos)
-      return { name: pos.ticker, value: Math.max(0, calc.marketValue) }
-    })
+  const allocationData = posCalcs
+    .map(({ pos, calc }) => ({ name: pos.ticker, value: Math.max(0, calc.marketValue) }))
     .filter(d => d.value > 0)
 
   return (
@@ -216,10 +237,18 @@ export default function PortfolioDetail() {
           </div>
 
           {/* Card 3: Unrealized P&L */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 col-span-2">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="text-sm text-gray-500 mb-1">Нереалізований P&L</div>
-            <div className={`text-2xl font-bold ${pnlColor(totalPnl)}`}>
-              {formatMoney(totalPnl)} ({formatPercent(pnlPercent)})
+            <div className={`text-2xl font-bold ${pnlColor(totalUnrealizedPnl)}`}>
+              {formatMoney(totalUnrealizedPnl)} ({formatPercent(unrealizedPnlPercent)})
+            </div>
+          </div>
+
+          {/* Card 4: Realized P&L */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="text-sm text-gray-500 mb-1">Реалізований P&L</div>
+            <div className={`text-2xl font-bold ${pnlColor(totalRealizedPnl)}`}>
+              {formatMoney(totalRealizedPnl)}
             </div>
           </div>
         </div>
@@ -342,25 +371,25 @@ export default function PortfolioDetail() {
         <p className="text-gray-500 text-center py-8">Додайте першу позицію</p>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[1100px]">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left py-3 px-3 font-medium text-gray-600">Назва</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Кількість</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Ціна</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">% Зміна</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Сер. ціна</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Ціна</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Інвестовано</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Ринкова вар.</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Нереаліз. P&L</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Нереаліз. %</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Реаліз. P&L</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-600">Реаліз. %</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Алокація</th>
                 <th className="text-right py-3 px-3 font-medium text-gray-600">Дії</th>
               </tr>
             </thead>
             <tbody>
-              {positions.map(pos => {
-                const calc = calcPosition(pos)
+              {posCalcs.map(({ pos, calc }) => {
                 const allocation = totalInvestmentValue > 0
                   ? (calc.marketValue / totalInvestmentValue) * 100
                   : 0
@@ -371,18 +400,23 @@ export default function PortfolioDetail() {
                       <div className="text-xs text-gray-500 truncate max-w-[140px]">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
                     </td>
                     <td className="text-right py-3 px-3 text-gray-700">{formatNumber(calc.totalQty, 4)}</td>
+                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.avgPrice)}</td>
                     <td className="text-right py-3 px-3 text-gray-700">
                       {calc.currentPrice ? formatMoney(calc.currentPrice) : '---'}
                     </td>
-                    <td className="text-right py-3 px-3 text-gray-400">---</td>
-                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.avgPrice)}</td>
                     <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.totalCost)}</td>
                     <td className="text-right py-3 px-3 font-medium text-gray-800">{formatMoney(calc.marketValue)}</td>
-                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.pnl)}`}>
-                      {formatMoney(calc.pnl)}
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.unrealizedPnl)}`}>
+                      {formatMoney(calc.unrealizedPnl)}
                     </td>
-                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.pnlPercent)}`}>
-                      {formatPercent(calc.pnlPercent)}
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.unrealizedPnlPercent)}`}>
+                      {formatPercent(calc.unrealizedPnlPercent)}
+                    </td>
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnl)}`}>
+                      {calc.realizedPnl !== 0 ? formatMoney(calc.realizedPnl) : '—'}
+                    </td>
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnlPercent)}`}>
+                      {calc.realizedPnl !== 0 ? formatPercent(calc.realizedPnlPercent) : '—'}
                     </td>
                     <td className="text-right py-3 px-3 text-gray-700">
                       {allocation.toFixed(2)}%
@@ -412,11 +446,12 @@ export default function PortfolioDetail() {
                 <td className="text-right py-3 px-3"></td>
                 <td className="text-right py-3 px-3"></td>
                 <td className="text-right py-3 px-3"></td>
-                <td className="text-right py-3 px-3"></td>
                 <td className="text-right py-3 px-3 text-gray-800">{formatMoney(totalCost)}</td>
                 <td className="text-right py-3 px-3 text-gray-800">{formatMoney(totalInvestmentValue)}</td>
-                <td className={`text-right py-3 px-3 ${pnlColor(totalPnl)}`}>{formatMoney(totalPnl)}</td>
-                <td className={`text-right py-3 px-3 ${pnlColor(pnlPercent)}`}>{formatPercent(pnlPercent)}</td>
+                <td className={`text-right py-3 px-3 ${pnlColor(totalUnrealizedPnl)}`}>{formatMoney(totalUnrealizedPnl)}</td>
+                <td className={`text-right py-3 px-3 ${pnlColor(unrealizedPnlPercent)}`}>{formatPercent(unrealizedPnlPercent)}</td>
+                <td className={`text-right py-3 px-3 ${pnlColor(totalRealizedPnl)}`}>{totalRealizedPnl !== 0 ? formatMoney(totalRealizedPnl) : '—'}</td>
+                <td className="text-right py-3 px-3"></td>
                 <td className="text-right py-3 px-3 text-gray-800">100%</td>
                 <td className="text-right py-3 px-3"></td>
               </tr>
