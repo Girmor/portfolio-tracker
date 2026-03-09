@@ -16,7 +16,8 @@ export default function Budget() {
 
   async function fetchBudget() {
     setLoading(true)
-    const { data } = await supabase.from('budget').select('*').order('created_at', { ascending: true })
+    const { data, error: fetchError } = await supabase.from('budget').select('*').order('updated_at', { ascending: true })
+    if (fetchError) { setError(fetchError.message); setLoading(false); return }
     setItems(data || [])
     setLoading(false)
   }
