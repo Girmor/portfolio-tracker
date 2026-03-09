@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Огляд', icon: '📊' },
   { to: '/portfolios', label: 'Портфелі', icon: '💼' },
   { to: '/trades', label: 'Угоди', icon: '📋' },
+  { to: '/import', label: 'Імпорт', icon: '📥' },
   { to: '/budget', label: 'Бюджет', icon: '💰' },
   { to: '/dividends', label: 'Дивіденди', icon: '💵' },
   { to: '/snapshots', label: 'Снепшоти', icon: '📸' },
