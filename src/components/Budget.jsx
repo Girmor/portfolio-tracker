@@ -33,7 +33,7 @@ export default function Budget() {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Видалити цю картку?')) return
+    if (!confirm('Видалити цей рахунок?')) return
     await supabase.from('budget').delete().eq('id', id)
     fetchBudget()
   }
@@ -82,7 +82,7 @@ export default function Budget() {
           onClick={() => { setShowForm(true); setEditingId(null); setForm({ label: '', currency: 'UAH', amount: '' }) }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
         >
-          + Додати картку
+          + Додати рахунок
         </button>
       </div>
 
