@@ -6,6 +6,7 @@ import PortfolioDetail from './components/PortfolioDetail'
 import Budget from './components/Budget'
 import Dividends from './components/Dividends'
 import Snapshots from './components/Snapshots'
+import TradeHistory from './components/TradeHistory'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/portfolios/:id" element={<PortfolioDetail />} />
         <Route path="/budget" element={<Budget />} />
         <Route path="/dividends" element={<Dividends />} />
+        <Route path="/trades" element={<TradeHistory />} />
         <Route path="/snapshots" element={<Snapshots />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

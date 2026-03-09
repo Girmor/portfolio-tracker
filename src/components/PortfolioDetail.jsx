@@ -147,6 +147,12 @@ export default function PortfolioDetail() {
     e.preventDefault()
     const newBalance = Number(cashForm.newBalance)
     if (isNaN(newBalance) || newBalance < 0) return
+    await supabase.from('adjustments').insert({
+      portfolio_id: id,
+      previous_balance: cashBalance,
+      new_balance: newBalance,
+      date: cashForm.date || new Date().toISOString().split('T')[0],
+    })
     await supabase
       .from('portfolios')
       .update({ cash_balance: newBalance })

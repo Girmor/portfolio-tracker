@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 const NAV_ITEMS = [
   { to: '/', label: 'Огляд', icon: '📊' },
   { to: '/portfolios', label: 'Портфелі', icon: '💼' },
+  { to: '/trades', label: 'Угоди', icon: '📋' },
   { to: '/budget', label: 'Бюджет', icon: '💰' },
   { to: '/dividends', label: 'Дивіденди', icon: '💵' },
   { to: '/snapshots', label: 'Снепшоти', icon: '📸' },
