@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { getCryptoPrices, getStockPrices, tickerToCoinId } from '../lib/priceService'
+import { getCryptoPrices, getStockPrices, getCoinId, resolveMissingCoinIds } from '../lib/priceService'
 import { formatMoney, pnlColor } from '../lib/formatters'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
@@ -21,12 +21,23 @@ export default function Overview() {
       supabase.from('portfolios').select('*, positions(*, trades(*))').order('created_at', { ascending: true }),
       supabase.from('budget').select('*'),
     ])
-    setPortfolios(pData || [])
     setBudget(bData || [])
 
     const allPositions = (pData || []).flatMap(p => p.positions || [])
-    const cryptoIds = allPositions.filter(p => p.type === 'crypto').map(p => tickerToCoinId(p.ticker))
-    const stockTickers = allPositions.filter(p => p.type === 'stock').map(p => p.ticker)
+    const resolvedPositions = await resolveMissingCoinIds(allPositions, supabase)
+
+    // Rebuild portfolios with resolved positions
+    const resolvedPortfolios = (pData || []).map(p => ({
+      ...p,
+      positions: (p.positions || []).map(pos => {
+        const resolved = resolvedPositions.find(rp => rp.id === pos.id)
+        return resolved || pos
+      })
+    }))
+    setPortfolios(resolvedPortfolios)
+
+    const cryptoIds = resolvedPositions.filter(p => p.type === 'crypto').map(p => getCoinId(p))
+    const stockTickers = resolvedPositions.filter(p => p.type === 'stock').map(p => p.ticker)
 
     const [cryptoPrices, stockPrices] = await Promise.all([
       cryptoIds.length ? getCryptoPrices([...new Set(cryptoIds)]) : {},
@@ -34,8 +45,8 @@ export default function Overview() {
     ])
 
     const merged = {}
-    allPositions.forEach(p => {
-      if (p.type === 'crypto') merged[p.ticker] = cryptoPrices[tickerToCoinId(p.ticker)] ?? null
+    resolvedPositions.forEach(p => {
+      if (p.type === 'crypto') merged[p.ticker] = cryptoPrices[getCoinId(p)] ?? null
       else merged[p.ticker] = stockPrices[p.ticker] ?? null
     })
     setPrices(merged)

@@ -78,6 +78,50 @@ export function tickerToCoinId(ticker) {
   return CRYPTO_MAP[lower] || lower
 }
 
+export function getCoinId(pos) {
+  return pos.coin_id || tickerToCoinId(pos.ticker)
+}
+
+export async function resolveMissingCoinIds(positions, supabase) {
+  const needsResolution = positions.filter(p => p.type === 'crypto' && !p.coin_id)
+  if (needsResolution.length === 0) return positions
+
+  const resolved = new Map()
+  const uniqueTickers = [...new Set(needsResolution.map(p => p.ticker.toUpperCase()))]
+
+  for (let i = 0; i < uniqueTickers.length; i++) {
+    const ticker = uniqueTickers[i]
+    try {
+      const results = await searchCrypto(ticker)
+      const match = results.find(r => r.ticker.toUpperCase() === ticker)
+      if (match?.coinId) {
+        resolved.set(ticker, match.coinId)
+      }
+    } catch { /* skip, will retry on next load */ }
+
+    if (i < uniqueTickers.length - 1) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+  }
+
+  if (resolved.size === 0) return positions
+
+  const updatePromises = []
+  const updatedPositions = positions.map(pos => {
+    const coinId = resolved.get(pos.ticker.toUpperCase())
+    if (pos.type === 'crypto' && !pos.coin_id && coinId) {
+      updatePromises.push(
+        supabase.from('positions').update({ coin_id: coinId }).eq('id', pos.id)
+      )
+      return { ...pos, coin_id: coinId }
+    }
+    return pos
+  })
+
+  await Promise.all(updatePromises)
+  return updatedPositions
+}
+
 export async function searchStocks(query) {
   const key = import.meta.env.VITE_FINNHUB_KEY
   if (!key || !query || query.length < 1) return []

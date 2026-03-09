@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getCryptoPrices, getStockPrices, tickerToCoinId, searchStocks, searchCrypto } from '../lib/priceService'
+import { getCryptoPrices, getStockPrices, getCoinId, searchStocks, searchCrypto, resolveMissingCoinIds } from '../lib/priceService'
 import { formatMoney, formatNumber, formatPercent, formatDate, pnlColor } from '../lib/formatters'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 
@@ -30,14 +30,11 @@ export default function PortfolioDetail() {
       supabase.from('positions').select('*, trades(*)').eq('portfolio_id', id).order('created_at', { ascending: true }),
     ])
     setPortfolio(pData)
-    setPositions(posData || [])
-    await fetchPrices(posData || [])
+    const resolvedPositions = await resolveMissingCoinIds(posData || [], supabase)
+    setPositions(resolvedPositions)
+    await fetchPrices(resolvedPositions)
     setLoading(false)
   }, [id])
-
-  function getCoinId(pos) {
-    return pos.coin_id || tickerToCoinId(pos.ticker)
-  }
 
   async function fetchPrices(positions) {
     const cryptoTickers = positions.filter(p => p.type === 'crypto').map(p => getCoinId(p))

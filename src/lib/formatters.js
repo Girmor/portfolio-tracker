@@ -1,10 +1,19 @@
 export function formatMoney(amount, currency = 'USD') {
   if (amount == null) return '—'
+
+  const absAmount = Math.abs(amount)
+  let maxDecimals = 2
+
+  if (absAmount > 0 && absAmount < 0.01) {
+    const magnitude = Math.floor(Math.log10(absAmount))
+    maxDecimals = Math.min(10, Math.abs(magnitude) + 2)
+  }
+
   return new Intl.NumberFormat('uk-UA', {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: maxDecimals,
   }).format(amount)
 }
 
