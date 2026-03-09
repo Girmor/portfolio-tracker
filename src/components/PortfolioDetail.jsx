@@ -190,14 +190,17 @@ export default function PortfolioDetail() {
 
   const cashBalance = Number(portfolio?.cash_balance) || 0
   const posCalcs = positions.map(p => ({ pos: p, calc: calcPosition(p) }))
-  const totalInvestmentValue = posCalcs.reduce((sum, { calc }) => sum + calc.marketValue, 0)
+  const activePositions = posCalcs.filter(({ calc }) => calc.totalQty > 0)
+  const soldPositions = posCalcs.filter(({ calc }) => calc.totalQty <= 0 && (calc.realizedPnl !== 0 || (calc.pos?.trades?.length ?? 0) > 0))
+  const totalInvestmentValue = activePositions.reduce((sum, { calc }) => sum + calc.marketValue, 0)
   const totalValue = totalInvestmentValue + cashBalance
-  const totalCost = posCalcs.reduce((sum, { calc }) => sum + calc.totalCost, 0)
-  const totalUnrealizedPnl = posCalcs.reduce((sum, { calc }) => sum + calc.unrealizedPnl, 0)
+  const totalCost = activePositions.reduce((sum, { calc }) => sum + calc.totalCost, 0)
+  const totalUnrealizedPnl = activePositions.reduce((sum, { calc }) => sum + calc.unrealizedPnl, 0)
   const totalRealizedPnl = posCalcs.reduce((sum, { calc }) => sum + calc.realizedPnl, 0)
   const unrealizedPnlPercent = totalCost > 0 ? (totalUnrealizedPnl / totalCost) * 100 : 0
+  const soldTotalRealizedPnl = soldPositions.reduce((sum, { calc }) => sum + calc.realizedPnl, 0)
 
-  const allocationData = posCalcs
+  const allocationData = activePositions
     .map(({ pos, calc }) => ({ name: pos.ticker, value: Math.max(0, calc.marketValue) }))
     .filter(d => d.value > 0)
 
@@ -368,8 +371,10 @@ export default function PortfolioDetail() {
       )}
 
       {/* Holdings Table */}
-      {positions.length === 0 ? (
+      {activePositions.length === 0 && soldPositions.length === 0 ? (
         <p className="text-gray-500 text-center py-8">Додайте першу позицію</p>
+      ) : activePositions.length === 0 ? (
+        <p className="text-gray-500 text-center py-8">Немає активних позицій</p>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm min-w-[1100px]">
@@ -390,7 +395,7 @@ export default function PortfolioDetail() {
               </tr>
             </thead>
             <tbody>
-              {posCalcs.map(({ pos, calc }) => {
+              {activePositions.map(({ pos, calc }) => {
                 const allocation = totalInvestmentValue > 0
                   ? (calc.marketValue / totalInvestmentValue) * 100
                   : 0
@@ -440,7 +445,6 @@ export default function PortfolioDetail() {
                 )
               })}
             </tbody>
-            {/* Table Footer: Totals */}
             <tfoot>
               <tr className="border-t-2 border-gray-300 bg-gray-50 font-medium">
                 <td className="py-3 px-3 text-gray-800">Всього</td>
@@ -458,6 +462,85 @@ export default function PortfolioDetail() {
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* Sold Positions Table */}
+      {soldPositions.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Продані активи</h3>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-3 px-3 font-medium text-gray-600">Назва</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Куплено (шт.)</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Сер. ціна купівлі</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Інвестовано</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Виручка</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Реаліз. P&L</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Реаліз. %</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-600">Дії</th>
+                </tr>
+              </thead>
+              <tbody>
+                {soldPositions.map(({ pos, calc }) => {
+                  const trades = pos.trades || []
+                  let totalBuyQty = 0, totalBuyCost = 0, totalSellProceeds = 0
+                  trades.forEach(t => {
+                    const qty = Number(t.quantity)
+                    const price = Number(t.price)
+                    if (t.type === 'buy') { totalBuyQty += qty; totalBuyCost += price * qty }
+                    else { totalSellProceeds += price * qty }
+                  })
+                  return (
+                    <tr key={pos.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-3">
+                        <div className="font-medium text-gray-500">{pos.ticker}</div>
+                        <div className="text-xs text-gray-400 truncate max-w-[140px]">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
+                      </td>
+                      <td className="text-right py-3 px-3 text-gray-500">{formatNumber(totalBuyQty, 4)}</td>
+                      <td className="text-right py-3 px-3 text-gray-500">{formatMoney(calc.avgPrice)}</td>
+                      <td className="text-right py-3 px-3 text-gray-500">{formatMoney(totalBuyCost)}</td>
+                      <td className="text-right py-3 px-3 text-gray-500">{formatMoney(totalSellProceeds)}</td>
+                      <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnl)}`}>
+                        {formatMoney(calc.realizedPnl)}
+                      </td>
+                      <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnlPercent)}`}>
+                        {formatPercent(calc.realizedPnlPercent)}
+                      </td>
+                      <td className="text-right py-3 px-3 whitespace-nowrap">
+                        <button
+                          onClick={() => { setShowAddTrade(pos.id); setTradeForm({ type: 'buy', price: '', quantity: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
+                          className="text-blue-600 hover:text-blue-800 text-xs mr-2"
+                        >
+                          +Угода
+                        </button>
+                        <button
+                          onClick={() => handleDeletePosition(pos.id)}
+                          className="text-red-500 hover:text-red-700 text-xs"
+                        >
+                          Вид.
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 bg-gray-50 font-medium">
+                  <td className="py-3 px-3 text-gray-800">Всього продано</td>
+                  <td className="text-right py-3 px-3"></td>
+                  <td className="text-right py-3 px-3"></td>
+                  <td className="text-right py-3 px-3"></td>
+                  <td className="text-right py-3 px-3"></td>
+                  <td className={`text-right py-3 px-3 ${pnlColor(soldTotalRealizedPnl)}`}>{formatMoney(soldTotalRealizedPnl)}</td>
+                  <td className="text-right py-3 px-3"></td>
+                  <td className="text-right py-3 px-3"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
 
