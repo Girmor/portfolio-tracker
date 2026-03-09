@@ -106,8 +106,9 @@ export default function ImportTrades() {
 
     try {
       const newTrades = parsedData.trades.filter(t => !duplicates.has(tradeFingerprint(t)))
-      if (newTrades.length === 0) {
-        setError('Немає нових угод для імпорту (всі дублікати)')
+      const hasDividends = parsedData.dividends?.length > 0
+      if (newTrades.length === 0 && !hasDividends) {
+        setError('Немає нових угод або дивідендів для імпорту')
         setImporting(false)
         return
       }
@@ -150,8 +151,16 @@ export default function ImportTrades() {
       }
 
       // 3. Create import record first (to get import_id for trades)
-      const tickers = [...new Set(newTrades.map(t => t.symbol))].sort()
-      const dates = newTrades.map(t => t.date).sort()
+      const allTickers = [
+        ...newTrades.map(t => t.symbol),
+        ...(parsedData.dividends || []).map(d => d.ticker),
+      ]
+      const tickers = [...new Set(allTickers)].sort()
+      const allDates = [
+        ...newTrades.map(t => t.date),
+        ...(parsedData.dividends || []).map(d => d.date),
+      ].sort()
+      const dates = allDates
 
       const { data: importRecord, error: importErr } = await supabase
         .from('imports')
@@ -163,7 +172,9 @@ export default function ImportTrades() {
           summary: {
             ending_cash: parsedData.endingCash,
             tickers,
-            date_range: { from: dates[0], to: dates[dates.length - 1] },
+            date_range: dates.length > 0 ? { from: dates[0], to: dates[dates.length - 1] } : null,
+            dividend_count: parsedData.dividends?.length || 0,
+            dividend_total: parsedData.dividends?.reduce((s, d) => s + d.amount, 0) || 0,
           },
           rollback_data: {
             created_trade_ids: [],
@@ -178,37 +189,59 @@ export default function ImportTrades() {
       const importId = importRecord.id
 
       // 4. Insert trades with import_id
-      const tradeInserts = newTrades.map(t => ({
-        position_id: positionMap[t.symbol],
-        type: t.type,
-        price: t.price,
-        quantity: t.quantity,
-        date: t.date,
-        notes: `IBKR | Комісія: ${formatMoney(Math.abs(t.commission))}`,
-        import_id: importId,
-      }))
+      if (newTrades.length > 0) {
+        const tradeInserts = newTrades.map(t => ({
+          position_id: positionMap[t.symbol],
+          type: t.type,
+          price: t.price,
+          quantity: t.quantity,
+          date: t.date,
+          notes: `IBKR | Комісія: ${formatMoney(Math.abs(t.commission))}`,
+          import_id: importId,
+        }))
 
-      const { data: insertedTrades, error: tradeErr } = await supabase
-        .from('trades')
-        .insert(tradeInserts)
-        .select('id')
+        const { data: insertedTrades, error: tradeErr } = await supabase
+          .from('trades')
+          .insert(tradeInserts)
+          .select('id')
 
-      if (tradeErr) throw new Error(`Помилка імпорту угод: ${tradeErr.message}`)
-      createdTradeIds.push(...(insertedTrades || []).map(t => t.id))
+        if (tradeErr) throw new Error(`Помилка імпорту угод: ${tradeErr.message}`)
+        createdTradeIds.push(...(insertedTrades || []).map(t => t.id))
+      }
 
-      // 5. Update import record with created trade IDs
+      // 5. Insert dividends
+      const createdDividendIds = []
+      if (parsedData.dividends?.length > 0) {
+        const divInserts = parsedData.dividends.map(d => ({
+          ticker: d.ticker,
+          amount: d.amount,
+          date: d.date,
+          notes: `IBKR імпорт | ${d.description}`,
+        }))
+
+        const { data: insertedDivs, error: divErr } = await supabase
+          .from('dividends')
+          .insert(divInserts)
+          .select('id')
+
+        if (divErr) throw new Error(`Помилка імпорту дивідендів: ${divErr.message}`)
+        createdDividendIds.push(...(insertedDivs || []).map(d => d.id))
+      }
+
+      // 6. Update import record with created IDs
       await supabase
         .from('imports')
         .update({
           rollback_data: {
             created_trade_ids: createdTradeIds,
             created_position_ids: createdPositionIds,
+            created_dividend_ids: createdDividendIds,
             previous_cash_balance: previousCashBalance,
           },
         })
         .eq('id', importId)
 
-      // 6. Update cash balance
+      // 7. Update cash balance
       if (parsedData.endingCash != null) {
         await supabase.from('adjustments').insert({
           portfolio_id: selectedPortfolio.id,
@@ -224,8 +257,12 @@ export default function ImportTrades() {
           .eq('id', selectedPortfolio.id)
       }
 
-      // 6. Reset wizard
-      setSuccess(`Імпортовано ${newTrades.length} угод${parsedData.endingCash != null ? `, баланс оновлено до ${formatMoney(parsedData.endingCash)}` : ''}`)
+      // 8. Reset wizard
+      const parts = []
+      if (newTrades.length > 0) parts.push(`${newTrades.length} угод`)
+      if (createdDividendIds.length > 0) parts.push(`${createdDividendIds.length} дивідендів`)
+      if (parsedData.endingCash != null) parts.push(`баланс оновлено до ${formatMoney(parsedData.endingCash)}`)
+      setSuccess(`Імпортовано: ${parts.join(', ')}`)
       setStep(1)
       setFile(null)
       setParsedData(null)
@@ -254,7 +291,15 @@ export default function ImportTrades() {
           .in('id', rollback_data.created_trade_ids)
       }
 
-      // 2. Delete auto-created positions (only if empty)
+      // 2. Delete imported dividends
+      if (rollback_data.created_dividend_ids?.length > 0) {
+        await supabase
+          .from('dividends')
+          .delete()
+          .in('id', rollback_data.created_dividend_ids)
+      }
+
+      // 4. Delete auto-created positions (only if empty)
       for (const posId of (rollback_data.created_position_ids || [])) {
         const { data: remaining } = await supabase
           .from('trades')
@@ -267,7 +312,7 @@ export default function ImportTrades() {
         }
       }
 
-      // 3. Restore cash balance
+      // 5. Restore cash balance
       if (rollback_data.previous_cash_balance != null) {
         const { data: portfolio } = await supabase
           .from('portfolios')
@@ -291,7 +336,7 @@ export default function ImportTrades() {
           .eq('id', imp.portfolio_id)
       }
 
-      // 4. Mark import as rolled back
+      // 6. Mark import as rolled back
       await supabase
         .from('imports')
         .update({ status: 'rolled_back' })
@@ -520,6 +565,15 @@ export default function ImportTrades() {
               <div className="text-xl font-bold text-gray-800">{uniqueTickers.length}</div>
               <div className="text-xs text-gray-400 mt-0.5 truncate">{uniqueTickers.join(', ')}</div>
             </div>
+            {parsedData.dividends?.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="text-sm text-gray-500">Дивіденди</div>
+                <div className="text-xl font-bold text-green-600">
+                  {formatMoney(parsedData.dividends.reduce((s, d) => s + d.amount, 0))}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">{parsedData.dividends.length} записів</div>
+              </div>
+            )}
             {parsedData.endingCash != null && (
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <div className="text-sm text-gray-500">Баланс рахунку</div>
@@ -591,6 +645,48 @@ export default function ImportTrades() {
             </table>
           </div>
 
+          {/* Dividends preview table */}
+          {parsedData.dividends?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto mb-6">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-700">
+                  💵 Дивіденди ({parsedData.dividends.length})
+                </h4>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/50">
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600">Дата</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600">Тікер</th>
+                    <th className="text-right py-2.5 px-3 font-medium text-gray-600">Сума (net)</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600">Деталі</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedData.dividends.map((d, i) => (
+                    <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2.5 px-3 text-gray-700">{formatDate(d.date)}</td>
+                      <td className="py-2.5 px-3 font-medium text-gray-800">{d.ticker}</td>
+                      <td className="text-right py-2.5 px-3 font-medium text-green-600">
+                        {formatMoney(d.amount)}
+                      </td>
+                      <td className="py-2.5 px-3 text-gray-500 text-xs">{d.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-gray-50/50">
+                    <td colSpan="2" className="py-2.5 px-3 text-sm font-medium text-gray-600">Всього</td>
+                    <td className="text-right py-2.5 px-3 text-sm font-bold text-green-600">
+                      {formatMoney(parsedData.dividends.reduce((s, d) => s + d.amount, 0))}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
           {/* Confirm/Cancel */}
           <div className="flex gap-3 justify-end">
             <button
@@ -601,12 +697,12 @@ export default function ImportTrades() {
             </button>
             <button
               onClick={handleImport}
-              disabled={importing || newTrades.length === 0}
+              disabled={importing || (newTrades.length === 0 && (!parsedData.dividends || parsedData.dividends.length === 0))}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {importing
                 ? 'Імпортується...'
-                : `Імпортувати ${newTrades.length} угод`}
+                : `Імпортувати ${newTrades.length} угод${parsedData.dividends?.length ? ` + ${parsedData.dividends.length} дивідендів` : ''}`}
             </button>
           </div>
         </div>
