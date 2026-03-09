@@ -45,15 +45,19 @@ export default function PortfolioDetail() {
       stockTickers.length ? getStockPrices(stockTickers) : {},
     ])
 
-    const merged = {}
-    positions.forEach(p => {
-      if (p.type === 'crypto') {
-        merged[p.ticker] = cryptoPrices[getCoinId(p)] ?? null
-      } else {
-        merged[p.ticker] = stockPrices[p.ticker] ?? null
-      }
+    setPrices(prev => {
+      const merged = { ...prev }
+      positions.forEach(p => {
+        if (p.type === 'crypto') {
+          const newPrice = cryptoPrices[getCoinId(p)]
+          if (newPrice != null) merged[p.ticker] = newPrice
+        } else {
+          const newPrice = stockPrices[p.ticker]
+          if (newPrice != null) merged[p.ticker] = newPrice
+        }
+      })
+      return merged
     })
-    setPrices(merged)
   }
 
   useEffect(() => { fetchData() }, [fetchData])

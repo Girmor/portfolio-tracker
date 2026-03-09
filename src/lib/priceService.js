@@ -11,14 +11,20 @@ export async function getCryptoPrice(coinId) {
   }
 }
 
-export async function getCryptoPrices(coinIds) {
+export async function getCryptoPrices(coinIds, retries = 2) {
   if (!coinIds.length) return {}
   try {
     const ids = coinIds.map(id => encodeURIComponent(id)).join(',')
     const res = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`
     )
-    if (!res.ok) return {}
+    if (!res.ok) {
+      if (retries > 0 && (res.status === 429 || res.status >= 500)) {
+        await new Promise(r => setTimeout(r, 3000))
+        return getCryptoPrices(coinIds, retries - 1)
+      }
+      return {}
+    }
     const data = await res.json()
     const result = {}
     for (const id of coinIds) {
@@ -26,6 +32,10 @@ export async function getCryptoPrices(coinIds) {
     }
     return result
   } catch {
+    if (retries > 0) {
+      await new Promise(r => setTimeout(r, 3000))
+      return getCryptoPrices(coinIds, retries - 1)
+    }
     return {}
   }
 }
