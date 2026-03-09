@@ -212,6 +212,11 @@ export default function TradeHistory() {
                       }`}>
                         {t.type === 'buy' ? 'Купівля' : 'Продаж'}
                       </span>
+                      {t.import_id && (
+                        <span className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
+                          📥 Імпорт
+                        </span>
+                      )}
                     </td>
                     <td className="text-right py-3 px-3 text-gray-700">{formatMoney(t.price)}</td>
                     <td className="text-right py-3 px-3 text-gray-700">{t.quantity}</td>

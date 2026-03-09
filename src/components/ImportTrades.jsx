@@ -149,7 +149,35 @@ export default function ImportTrades() {
         createdPositionIds.push(newPos.id)
       }
 
-      // 3. Insert trades
+      // 3. Create import record first (to get import_id for trades)
+      const tickers = [...new Set(newTrades.map(t => t.symbol))].sort()
+      const dates = newTrades.map(t => t.date).sort()
+
+      const { data: importRecord, error: importErr } = await supabase
+        .from('imports')
+        .insert({
+          portfolio_id: selectedPortfolio.id,
+          broker: 'ibkr',
+          filename: file.name,
+          trade_count: newTrades.length,
+          summary: {
+            ending_cash: parsedData.endingCash,
+            tickers,
+            date_range: { from: dates[0], to: dates[dates.length - 1] },
+          },
+          rollback_data: {
+            created_trade_ids: [],
+            created_position_ids: createdPositionIds,
+            previous_cash_balance: previousCashBalance,
+          },
+        })
+        .select('id')
+        .single()
+
+      if (importErr) throw new Error(`Помилка створення запису імпорту: ${importErr.message}`)
+      const importId = importRecord.id
+
+      // 4. Insert trades with import_id
       const tradeInserts = newTrades.map(t => ({
         position_id: positionMap[t.symbol],
         type: t.type,
@@ -157,6 +185,7 @@ export default function ImportTrades() {
         quantity: t.quantity,
         date: t.date,
         notes: `IBKR | Комісія: ${formatMoney(Math.abs(t.commission))}`,
+        import_id: importId,
       }))
 
       const { data: insertedTrades, error: tradeErr } = await supabase
@@ -167,7 +196,19 @@ export default function ImportTrades() {
       if (tradeErr) throw new Error(`Помилка імпорту угод: ${tradeErr.message}`)
       createdTradeIds.push(...(insertedTrades || []).map(t => t.id))
 
-      // 4. Update cash balance
+      // 5. Update import record with created trade IDs
+      await supabase
+        .from('imports')
+        .update({
+          rollback_data: {
+            created_trade_ids: createdTradeIds,
+            created_position_ids: createdPositionIds,
+            previous_cash_balance: previousCashBalance,
+          },
+        })
+        .eq('id', importId)
+
+      // 6. Update cash balance
       if (parsedData.endingCash != null) {
         await supabase.from('adjustments').insert({
           portfolio_id: selectedPortfolio.id,
@@ -182,27 +223,6 @@ export default function ImportTrades() {
           .update({ cash_balance: parsedData.endingCash })
           .eq('id', selectedPortfolio.id)
       }
-
-      // 5. Save import record
-      const tickers = [...new Set(newTrades.map(t => t.symbol))].sort()
-      const dates = newTrades.map(t => t.date).sort()
-
-      await supabase.from('imports').insert({
-        portfolio_id: selectedPortfolio.id,
-        broker: 'ibkr',
-        filename: file.name,
-        trade_count: newTrades.length,
-        summary: {
-          ending_cash: parsedData.endingCash,
-          tickers,
-          date_range: { from: dates[0], to: dates[dates.length - 1] },
-        },
-        rollback_data: {
-          created_trade_ids: createdTradeIds,
-          created_position_ids: createdPositionIds,
-          previous_cash_balance: previousCashBalance,
-        },
-      })
 
       // 6. Reset wizard
       setSuccess(`Імпортовано ${newTrades.length} угод${parsedData.endingCash != null ? `, баланс оновлено до ${formatMoney(parsedData.endingCash)}` : ''}`)
