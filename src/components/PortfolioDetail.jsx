@@ -204,6 +204,7 @@ export default function PortfolioDetail() {
   const allocationData = activePositions
     .map(({ pos, calc }) => ({ name: pos.ticker, value: Math.max(0, calc.marketValue) }))
     .filter(d => d.value > 0)
+    .sort((a, b) => b.value - a.value)
 
   const bestPerformer = activePositions.reduce((best, item) =>
     !best || item.calc.unrealizedPnlPercent > best.calc.unrealizedPnlPercent ? item : best
@@ -222,8 +223,8 @@ export default function PortfolioDetail() {
 
       {/* Summary Stats + Allocation Row */}
       <div className="flex flex-col lg:flex-row gap-3 mb-6">
-        {/* Stats Cards */}
-        <div className="flex-1 grid grid-cols-2 gap-3">
+        {/* Stats Cards — 2/3 */}
+        <div className="lg:w-2/3 grid grid-cols-2 gap-3">
           {/* Card 1: Portfolio Value */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Вартість портфеля</div>
@@ -282,20 +283,20 @@ export default function PortfolioDetail() {
           </div>
         </div>
 
-        {/* Compact Allocation */}
+        {/* Allocation — 1/3 */}
         {allocationData.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-80 shrink-0">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-1/3 shrink-0">
             <div className="text-xs text-gray-500 mb-2">Алокація</div>
-            <div className="flex items-center gap-4">
-              <div className="w-24 h-24 shrink-0">
+            <div className="flex items-center gap-5">
+              <div className="w-32 h-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={allocationData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={30}
-                      outerRadius={45}
+                      innerRadius={38}
+                      outerRadius={58}
                       dataKey="value"
                     >
                       {allocationData.map((_, i) => (
@@ -306,19 +307,19 @@ export default function PortfolioDetail() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex-1 space-y-1 max-h-[120px] overflow-y-auto">
+              <div className="flex-1 space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
                 {allocationData.map((item, i) => {
                   const percent = totalInvestmentValue > 0
                     ? ((item.value / totalInvestmentValue) * 100).toFixed(1)
                     : '0.0'
                   return (
-                    <div key={item.name} className="flex items-center gap-1.5">
+                    <div key={item.name} className="flex items-center gap-2">
                       <div
-                        className="w-2 h-2 rounded-full shrink-0"
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: COLORS[i % COLORS.length] }}
                       />
-                      <span className="text-xs text-gray-700">{item.name}</span>
-                      <span className="text-xs text-gray-400 ml-auto tabular-nums">{percent}%</span>
+                      <span className="text-sm text-gray-700">{item.name}</span>
+                      <span className="text-sm text-gray-400 ml-auto tabular-nums">{percent}%</span>
                     </div>
                   )
                 })}
