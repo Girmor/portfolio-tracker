@@ -129,100 +129,100 @@ export default function Overview() {
     <div>
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Огляд</h2>
 
-      {/* Summary Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {/* Card 1: Total Capital */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">Загальний капітал</div>
-          <div className="text-xl font-bold text-gray-800">{formatMoney(totalCapital)}</div>
-          <div className="text-xs text-gray-400 mt-1.5">Бюджет: {formatMoney(budgetTotal)}</div>
-        </div>
+      {/* Summary Stats + Allocation Row */}
+      <div className="flex flex-col lg:flex-row gap-3 mb-6">
+        {/* Stats Cards */}
+        <div className="flex-1 grid grid-cols-2 gap-3">
+          {/* Card 1: Total Capital */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-xs text-gray-500 mb-1">Загальний капітал</div>
+            <div className="text-xl font-bold text-gray-800">{formatMoney(totalCapital)}</div>
+            <div className="text-xs text-gray-400 mt-1.5">Бюджет: {formatMoney(budgetTotal)}</div>
+          </div>
 
-        {/* Card 2: Investments + P&L */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">Інвестиції</div>
-          <div className="text-xl font-bold text-gray-800">{formatMoney(investmentTotal)}</div>
-          <div className={`text-xs mt-1.5 ${pnlColor(totalPnl)}`}>
-            P&L: {formatMoney(totalPnl)} ({formatPercent(totalPnlPercent)})
+          {/* Card 2: Investments + P&L */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-xs text-gray-500 mb-1">Інвестиції</div>
+            <div className="text-xl font-bold text-gray-800">{formatMoney(investmentTotal)}</div>
+            <div className={`text-xs mt-1.5 ${pnlColor(totalPnl)}`}>
+              P&L: {formatMoney(totalPnl)} ({formatPercent(totalPnlPercent)})
+            </div>
+          </div>
+
+          {/* Card 3: Best Portfolio */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-xs text-gray-500 mb-1">Найкращий портфель</div>
+            {bestPortfolio && portfolios.length > 1 ? (
+              <>
+                <div className="text-xl font-bold text-gray-800">{bestPortfolio.portfolio.name}</div>
+                <div className="text-xs text-green-600 mt-1.5">
+                  {formatMoney(bestPortfolio.pnl)} &nbsp;{formatPercent(bestPortfolio.pnlPercent)}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-gray-400 mt-1">—</div>
+            )}
+          </div>
+
+          {/* Card 4: Worst Portfolio */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-xs text-gray-500 mb-1">Найгірший портфель</div>
+            {worstPortfolio && portfolios.length > 1 ? (
+              <>
+                <div className="text-xl font-bold text-gray-800">{worstPortfolio.portfolio.name}</div>
+                <div className="text-xs text-red-600 mt-1.5">
+                  {formatMoney(worstPortfolio.pnl)} &nbsp;{formatPercent(worstPortfolio.pnlPercent)}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-gray-400 mt-1">—</div>
+            )}
           </div>
         </div>
 
-        {/* Card 3: Best Portfolio */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">Найкращий портфель</div>
-          {bestPortfolio && portfolios.length > 1 ? (
-            <>
-              <div className="text-xl font-bold text-gray-800">{bestPortfolio.portfolio.name}</div>
-              <div className="text-xs text-green-600 mt-1.5">
-                {formatMoney(bestPortfolio.pnl)} &nbsp;{formatPercent(bestPortfolio.pnlPercent)}
+        {/* Compact Allocation */}
+        {pieData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-80 shrink-0">
+            <div className="text-xs text-gray-500 mb-2">Розподіл капіталу</div>
+            <div className="flex items-center gap-4">
+              <div className="w-24 h-24 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={30}
+                      outerRadius={45}
+                      dataKey="value"
+                    >
+                      {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => formatMoney(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            </>
-          ) : (
-            <div className="text-sm text-gray-400 mt-1">—</div>
-          )}
-        </div>
-
-        {/* Card 4: Worst Portfolio */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">Найгірший портфель</div>
-          {worstPortfolio && portfolios.length > 1 ? (
-            <>
-              <div className="text-xl font-bold text-gray-800">{worstPortfolio.portfolio.name}</div>
-              <div className="text-xs text-red-600 mt-1.5">
-                {formatMoney(worstPortfolio.pnl)} &nbsp;{formatPercent(worstPortfolio.pnlPercent)}
+              <div className="flex-1 space-y-1 max-h-[120px] overflow-y-auto">
+                {pieData.map((item, i) => {
+                  const percent = totalCapital > 0
+                    ? ((item.value / totalCapital) * 100).toFixed(1)
+                    : '0.0'
+                  return (
+                    <div key={item.name} className="flex items-center gap-1.5">
+                      <div
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                      />
+                      <span className="text-xs text-gray-700">{item.name}</span>
+                      <span className="text-xs text-gray-400 ml-auto tabular-nums">{percent}%</span>
+                    </div>
+                  )
+                })}
               </div>
-            </>
-          ) : (
-            <div className="text-sm text-gray-400 mt-1">—</div>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Allocation with side legend */}
-      {pieData.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-          <div className="text-sm font-semibold text-gray-700 mb-3">Розподіл капіталу</div>
-          <div className="flex items-center gap-8">
-            {/* Donut Chart */}
-            <div className="w-48 h-48 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => formatMoney(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Legend */}
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-              {pieData.map((item, i) => {
-                const percent = totalCapital > 0
-                  ? ((item.value / totalCapital) * 100).toFixed(2)
-                  : '0.00'
-                return (
-                  <div key={item.name} className="flex items-center gap-2.5 py-1">
-                    <div
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                    />
-                    <span className="text-sm font-medium text-gray-700">{item.name}</span>
-                    <span className="text-sm text-gray-400 ml-auto tabular-nums">{percent}%</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Overall History Chart */}
       <PortfolioHistoryChart portfolioId={null} />
