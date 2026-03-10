@@ -184,7 +184,7 @@ export default function Overview() {
         {pieData.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-1/3 shrink-0">
             <div className="text-xs text-gray-500 mb-2">Розподіл капіталу</div>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center justify-center gap-5">
               <div className="w-32 h-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -202,7 +202,7 @@ export default function Overview() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex-1 space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
+              <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
                 {pieData.map((item, i) => {
                   const percent = totalCapital > 0
                     ? ((item.value / totalCapital) * 100).toFixed(1)
@@ -213,8 +213,8 @@ export default function Overview() {
                         className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: COLORS[i % COLORS.length] }}
                       />
-                      <span className="text-sm text-gray-700">{item.name}</span>
-                      <span className="text-sm text-gray-400 ml-auto tabular-nums">{percent}%</span>
+                      <span className="text-sm text-gray-700 whitespace-nowrap">{item.name}</span>
+                      <span className="text-sm text-gray-400 tabular-nums">{percent}%</span>
                     </div>
                   )
                 })}

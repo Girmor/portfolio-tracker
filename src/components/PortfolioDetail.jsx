@@ -287,7 +287,7 @@ export default function PortfolioDetail() {
         {allocationData.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-1/3 shrink-0">
             <div className="text-xs text-gray-500 mb-2">Алокація</div>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center justify-center gap-5">
               <div className="w-32 h-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -307,7 +307,7 @@ export default function PortfolioDetail() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex-1 space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
+              <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
                 {allocationData.map((item, i) => {
                   const percent = totalInvestmentValue > 0
                     ? ((item.value / totalInvestmentValue) * 100).toFixed(1)
@@ -318,8 +318,8 @@ export default function PortfolioDetail() {
                         className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: COLORS[i % COLORS.length] }}
                       />
-                      <span className="text-sm text-gray-700">{item.name}</span>
-                      <span className="text-sm text-gray-400 ml-auto tabular-nums">{percent}%</span>
+                      <span className="text-sm text-gray-700 whitespace-nowrap">{item.name}</span>
+                      <span className="text-sm text-gray-400 tabular-nums">{percent}%</span>
                     </div>
                   )
                 })}
