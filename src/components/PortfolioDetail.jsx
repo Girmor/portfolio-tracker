@@ -204,6 +204,13 @@ export default function PortfolioDetail() {
     .map(({ pos, calc }) => ({ name: pos.ticker, value: Math.max(0, calc.marketValue) }))
     .filter(d => d.value > 0)
 
+  const bestPerformer = activePositions.reduce((best, item) =>
+    !best || item.calc.unrealizedPnlPercent > best.calc.unrealizedPnlPercent ? item : best
+  , null)
+  const worstPerformer = activePositions.reduce((worst, item) =>
+    !worst || item.calc.unrealizedPnlPercent < worst.calc.unrealizedPnlPercent ? item : worst
+  , null)
+
   return (
     <div>
       {/* Header */}
@@ -212,99 +219,123 @@ export default function PortfolioDetail() {
         <h2 className="text-2xl font-bold text-gray-800">{portfolio.name}</h2>
       </div>
 
-      {/* Stats Cards + Allocation Pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Left: Stats */}
-        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-          {/* Card 1: Portfolio Value + Cash */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="text-sm text-gray-500 mb-1">Вартість портфеля</div>
-            <div className="text-2xl font-bold text-gray-800">{formatMoney(totalValue)}</div>
-            <div className="flex items-center gap-3 mt-2">
-              <span className="text-sm text-gray-500">Готівка: {formatMoney(cashBalance)}</span>
-              <button
-                onClick={() => {
-                  setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
-                  setShowCashModal(true)
-                }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium border border-blue-200 rounded-md px-2 py-0.5"
-              >
-                Коригування
-              </button>
-            </div>
-          </div>
-
-          {/* Card 2: Invested */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="text-sm text-gray-500 mb-1">Інвестовано</div>
-            <div className="text-2xl font-bold text-gray-800">{formatMoney(totalCost)}</div>
-          </div>
-
-          {/* Card 3: Unrealized P&L */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="text-sm text-gray-500 mb-1">Нереалізований P&L</div>
-            <div className={`text-2xl font-bold ${pnlColor(totalUnrealizedPnl)}`}>
-              {formatMoney(totalUnrealizedPnl)} ({formatPercent(unrealizedPnlPercent)})
-            </div>
-          </div>
-
-          {/* Card 4: Realized P&L */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="text-sm text-gray-500 mb-1">Реалізований P&L</div>
-            <div className={`text-2xl font-bold ${pnlColor(totalRealizedPnl)}`}>
-              {formatMoney(totalRealizedPnl)}
-            </div>
+      {/* Summary Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        {/* Card 1: Portfolio Value */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-500 mb-1">Вартість портфеля</div>
+          <div className="text-xl font-bold text-gray-800">{formatMoney(totalValue)}</div>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="text-xs text-gray-400">Готівка: {formatMoney(cashBalance)}</span>
+            <button
+              onClick={() => {
+                setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
+                setShowCashModal(true)
+              }}
+              className="text-[10px] text-blue-600 hover:text-blue-800 font-medium border border-blue-200 rounded px-1.5 py-0.5"
+            >
+              Коригування
+            </button>
           </div>
         </div>
 
-        {/* Right: Allocation Pie Chart */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="text-sm font-semibold text-gray-700 mb-2">Алокація</div>
-          {allocationData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={allocationData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
-                >
-                  {allocationData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => formatMoney(v)} />
-              </PieChart>
-            </ResponsiveContainer>
+        {/* Card 2: Invested + P&L */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-500 mb-1">Інвестовано</div>
+          <div className="text-xl font-bold text-gray-800">{formatMoney(totalCost)}</div>
+          <div className={`text-xs mt-1.5 ${pnlColor(totalUnrealizedPnl)}`}>
+            P&L: {formatMoney(totalUnrealizedPnl)} ({formatPercent(unrealizedPnlPercent)})
+          </div>
+        </div>
+
+        {/* Card 3: Best Performer */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-500 mb-1">Найкращий актив</div>
+          {bestPerformer ? (
+            <>
+              <div className="text-xl font-bold text-gray-800">{bestPerformer.pos.ticker}</div>
+              <div className="text-xs text-green-600 mt-1.5">
+                {formatMoney(bestPerformer.calc.unrealizedPnl)} &nbsp;{formatPercent(bestPerformer.calc.unrealizedPnlPercent)}
+              </div>
+            </>
           ) : (
-            <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">Немає даних</div>
+            <div className="text-sm text-gray-400 mt-1">—</div>
+          )}
+        </div>
+
+        {/* Card 4: Worst Performer */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-500 mb-1">Найгірший актив</div>
+          {worstPerformer ? (
+            <>
+              <div className="text-xl font-bold text-gray-800">{worstPerformer.pos.ticker}</div>
+              <div className="text-xs text-red-600 mt-1.5">
+                {formatMoney(worstPerformer.calc.unrealizedPnl)} &nbsp;{formatPercent(worstPerformer.calc.unrealizedPnlPercent)}
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-gray-400 mt-1">—</div>
           )}
         </div>
       </div>
 
+      {/* Allocation Section */}
+      {allocationData.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <div className="text-sm font-semibold text-gray-700 mb-3">Алокація</div>
+          <div className="flex items-center gap-8">
+            {/* Donut Chart */}
+            <div className="w-48 h-48 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={allocationData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={80}
+                    dataKey="value"
+                  >
+                    {allocationData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v) => formatMoney(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Legend */}
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+              {allocationData.map((item, i) => {
+                const percent = totalInvestmentValue > 0
+                  ? ((item.value / totalInvestmentValue) * 100).toFixed(2)
+                  : '0.00'
+                return (
+                  <div key={item.name} className="flex items-center gap-2.5 py-1">
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                    />
+                    <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                    <span className="text-sm text-gray-400 ml-auto tabular-nums">{percent}%</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Holdings Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-700">Холдинги</h3>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
-              setShowCashModal(true)
-            }}
-            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
-          >
-            Коригування
-          </button>
-          <button
-            onClick={() => setShowAddPosition(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-          >
-            + Додати позицію
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAddPosition(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+        >
+          + Додати позицію
+        </button>
       </div>
 
       {/* Add Position Form */}
