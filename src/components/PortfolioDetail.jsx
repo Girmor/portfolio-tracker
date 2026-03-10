@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { getCryptoPrices, getStockPrices, getCoinId, searchStocks, searchCrypto, resolveMissingCoinIds } from '../lib/priceService'
 import { formatMoney, formatNumber, formatPercent, formatDate, pnlColor } from '../lib/formatters'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import PortfolioHistoryChart from './PortfolioHistoryChart'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
@@ -326,6 +327,9 @@ export default function PortfolioDetail() {
           </div>
         </div>
       )}
+
+      {/* Portfolio History Chart */}
+      <PortfolioHistoryChart portfolioId={id} />
 
       {/* Holdings Header */}
       <div className="flex items-center justify-between mb-4">

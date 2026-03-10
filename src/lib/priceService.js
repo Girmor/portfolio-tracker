@@ -132,6 +132,22 @@ export async function resolveMissingCoinIds(positions, supabase) {
   return updatedPositions
 }
 
+export async function getBtcHistoricalPrices(days = 365) {
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.prices || []).map(([timestamp, price]) => ({
+      date: timestamp,
+      price,
+    }))
+  } catch {
+    return []
+  }
+}
+
 export async function searchStocks(query) {
   const key = import.meta.env.VITE_FINNHUB_KEY
   if (!key || !query || query.length < 1) return []
