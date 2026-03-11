@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { getCryptoPrices, getStockPrices, getCoinId, resolveMissingCoinIds } from '../lib/priceService'
+import { getPricesFromServer, getCoinId, resolveMissingCoinIds } from '../lib/priceService'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
 
@@ -37,25 +37,13 @@ export default function Overview() {
     }))
     setPortfolios(resolvedPortfolios)
 
-    const cryptoIds = resolvedPositions.filter(p => p.type === 'crypto').map(p => getCoinId(p))
-    const stockTickers = resolvedPositions.filter(p => p.type === 'stock').map(p => p.ticker)
-
-    const [cryptoPrices, stockPrices] = await Promise.all([
-      cryptoIds.length ? getCryptoPrices([...new Set(cryptoIds)]) : {},
-      stockTickers.length ? getStockPrices([...new Set(stockTickers)]) : {},
-    ])
+    const serverPrices = await getPricesFromServer(resolvedPositions)
 
     setPrices(prev => {
       const merged = { ...prev }
-      resolvedPositions.forEach(p => {
-        if (p.type === 'crypto') {
-          const newPrice = cryptoPrices[getCoinId(p)]
-          if (newPrice != null) merged[p.ticker] = newPrice
-        } else {
-          const newPrice = stockPrices[p.ticker]
-          if (newPrice != null) merged[p.ticker] = newPrice
-        }
-      })
+      for (const [ticker, price] of Object.entries(serverPrices)) {
+        if (price != null) merged[ticker] = price
+      }
       return merged
     })
     setLoading(false)

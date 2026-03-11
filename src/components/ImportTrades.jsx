@@ -72,28 +72,58 @@ export default function ImportTrades() {
     setFile(f)
 
     try {
-      const text = await f.text()
-      const result = parseIBKRCsv(text)
-      setParsedData(result)
+      const csvText = await f.text()
 
-      // Fetch existing trades for duplicate detection
-      const { data: existingPositions } = await supabase
-        .from('positions')
-        .select('*, trades(*)')
-        .eq('portfolio_id', selectedPortfolio.id)
-
-      const existingFingerprints = new Set()
-      ;(existingPositions || []).forEach(pos => {
-        ;(pos.trades || []).forEach(t => {
-          existingFingerprints.add(
-            `${pos.ticker}|${t.date}|${t.type}|${Number(t.quantity)}|${Number(t.price)}`
-          )
-        })
+      // Use server-side preview (parses CSV + detects duplicates in one call)
+      const { data, error } = await supabase.functions.invoke('import-ibkr-preview', {
+        body: { portfolioId: selectedPortfolio.id, csvText },
       })
-      setDuplicates(existingFingerprints)
+
+      if (error) throw new Error(error.message || 'Preview failed')
+
+      // data.trades already have isDuplicate flag from server
+      const previewResult = {
+        trades: data.trades || [],
+        dividends: data.dividends || [],
+        endingCash: data.endingCash ?? null,
+        startingCash: data.startingCash ?? null,
+        errors: data.parseErrors || [],
+      }
+      setParsedData(previewResult)
+
+      // Build duplicates set from server response
+      const duplicateFingerprints = new Set(
+        (data.trades || [])
+          .filter(t => t.isDuplicate)
+          .map(t => tradeFingerprint(t))
+      )
+      setDuplicates(duplicateFingerprints)
       setStep(4)
     } catch (err) {
-      setError(`Помилка читання файлу: ${err.message}`)
+      // Fallback: client-side parsing if Edge Function unavailable
+      try {
+        const text = await f.text()
+        const result = parseIBKRCsv(text)
+        setParsedData(result)
+
+        const { data: existingPositions } = await supabase
+          .from('positions')
+          .select('*, trades(*)')
+          .eq('portfolio_id', selectedPortfolio.id)
+
+        const existingFingerprints = new Set()
+        ;(existingPositions || []).forEach(pos => {
+          ;(pos.trades || []).forEach(t => {
+            existingFingerprints.add(
+              `${pos.ticker}|${t.date}|${t.type}|${Number(t.quantity)}|${Number(t.price)}`
+            )
+          })
+        })
+        setDuplicates(existingFingerprints)
+        setStep(4)
+      } catch (fallbackErr) {
+        setError(`Помилка читання файлу: ${fallbackErr.message}`)
+      }
     }
   }
 
@@ -113,155 +143,26 @@ export default function ImportTrades() {
         return
       }
 
-      const previousCashBalance = Number(selectedPortfolio.cash_balance) || 0
-      const createdPositionIds = []
-      const createdTradeIds = []
+      // Re-read the file for the commit call
+      const csvText = await file.text()
 
-      // 1. Get existing positions
-      const { data: existingPositions } = await supabase
-        .from('positions')
-        .select('id, ticker')
-        .eq('portfolio_id', selectedPortfolio.id)
-
-      const positionMap = {}
-      ;(existingPositions || []).forEach(p => {
-        positionMap[p.ticker] = p.id
+      const { data, error } = await supabase.functions.invoke('import-ibkr-commit', {
+        body: {
+          portfolioId: selectedPortfolio.id,
+          csvText,
+          filename: file.name,
+          skipDuplicates: true,
+        },
       })
 
-      // 2. Create positions for new tickers
-      const uniqueNewTickers = [...new Set(
-        newTrades.map(t => t.symbol).filter(s => !positionMap[s])
-      )]
+      if (error) throw new Error(error.message || 'Import failed')
 
-      for (const ticker of uniqueNewTickers) {
-        const { data: newPos, error: posErr } = await supabase
-          .from('positions')
-          .insert({
-            ticker,
-            name: ticker,
-            type: 'stock',
-            portfolio_id: selectedPortfolio.id,
-          })
-          .select('id')
-          .single()
-
-        if (posErr) throw new Error(`Помилка створення позиції ${ticker}: ${posErr.message}`)
-        positionMap[ticker] = newPos.id
-        createdPositionIds.push(newPos.id)
-      }
-
-      // 3. Create import record first (to get import_id for trades)
-      const allTickers = [
-        ...newTrades.map(t => t.symbol),
-        ...(parsedData.dividends || []).map(d => d.ticker),
-      ]
-      const tickers = [...new Set(allTickers)].sort()
-      const allDates = [
-        ...newTrades.map(t => t.date),
-        ...(parsedData.dividends || []).map(d => d.date),
-      ].sort()
-      const dates = allDates
-
-      const { data: importRecord, error: importErr } = await supabase
-        .from('imports')
-        .insert({
-          portfolio_id: selectedPortfolio.id,
-          broker: 'ibkr',
-          filename: file.name,
-          trade_count: newTrades.length,
-          summary: {
-            ending_cash: parsedData.endingCash,
-            tickers,
-            date_range: dates.length > 0 ? { from: dates[0], to: dates[dates.length - 1] } : null,
-            dividend_count: parsedData.dividends?.length || 0,
-            dividend_total: parsedData.dividends?.reduce((s, d) => s + d.amount, 0) || 0,
-          },
-          rollback_data: {
-            created_trade_ids: [],
-            created_position_ids: createdPositionIds,
-            previous_cash_balance: previousCashBalance,
-          },
-        })
-        .select('id')
-        .single()
-
-      if (importErr) throw new Error(`Помилка створення запису імпорту: ${importErr.message}`)
-      const importId = importRecord.id
-
-      // 4. Insert trades with import_id
-      if (newTrades.length > 0) {
-        const tradeInserts = newTrades.map(t => ({
-          position_id: positionMap[t.symbol],
-          type: t.type,
-          price: t.price,
-          quantity: t.quantity,
-          date: t.date,
-          notes: `IBKR | Комісія: ${formatMoney(Math.abs(t.commission))}`,
-          import_id: importId,
-        }))
-
-        const { data: insertedTrades, error: tradeErr } = await supabase
-          .from('trades')
-          .insert(tradeInserts)
-          .select('id')
-
-        if (tradeErr) throw new Error(`Помилка імпорту угод: ${tradeErr.message}`)
-        createdTradeIds.push(...(insertedTrades || []).map(t => t.id))
-      }
-
-      // 5. Insert dividends
-      const createdDividendIds = []
-      if (parsedData.dividends?.length > 0) {
-        const divInserts = parsedData.dividends.map(d => ({
-          ticker: d.ticker,
-          amount: d.amount,
-          date: d.date,
-          notes: `IBKR імпорт | ${d.description}`,
-        }))
-
-        const { data: insertedDivs, error: divErr } = await supabase
-          .from('dividends')
-          .insert(divInserts)
-          .select('id')
-
-        if (divErr) throw new Error(`Помилка імпорту дивідендів: ${divErr.message}`)
-        createdDividendIds.push(...(insertedDivs || []).map(d => d.id))
-      }
-
-      // 6. Update import record with created IDs
-      await supabase
-        .from('imports')
-        .update({
-          rollback_data: {
-            created_trade_ids: createdTradeIds,
-            created_position_ids: createdPositionIds,
-            created_dividend_ids: createdDividendIds,
-            previous_cash_balance: previousCashBalance,
-          },
-        })
-        .eq('id', importId)
-
-      // 7. Update cash balance
-      if (parsedData.endingCash != null) {
-        await supabase.from('adjustments').insert({
-          portfolio_id: selectedPortfolio.id,
-          previous_balance: previousCashBalance,
-          new_balance: parsedData.endingCash,
-          date: new Date().toISOString().split('T')[0],
-          notes: `IBKR імпорт — ${file.name}`,
-        })
-
-        await supabase
-          .from('portfolios')
-          .update({ cash_balance: parsedData.endingCash })
-          .eq('id', selectedPortfolio.id)
-      }
-
-      // 8. Reset wizard
       const parts = []
-      if (newTrades.length > 0) parts.push(`${newTrades.length} угод`)
-      if (createdDividendIds.length > 0) parts.push(`${createdDividendIds.length} дивідендів`)
+      if (data.tradesImported > 0) parts.push(`${data.tradesImported} угод`)
+      if (data.dividendsImported > 0) parts.push(`${data.dividendsImported} дивідендів`)
       if (parsedData.endingCash != null) parts.push(`баланс оновлено до ${formatMoney(parsedData.endingCash)}`)
+      if (data.skippedDuplicates > 0) parts.push(`${data.skippedDuplicates} дублікатів пропущено`)
+
       setSuccess(`Імпортовано: ${parts.join(', ')}`)
       setStep(1)
       setFile(null)
@@ -322,7 +223,7 @@ export default function ImportTrades() {
 
         const currentCash = Number(portfolio?.cash_balance) || 0
 
-        await supabase.from('adjustments').insert({
+        await supabase.from('cash_adjustments').insert({
           portfolio_id: imp.portfolio_id,
           previous_balance: currentCash,
           new_balance: rollback_data.previous_cash_balance,

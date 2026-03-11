@@ -1,3 +1,58 @@
+import { supabase } from './supabase'
+
+/**
+ * Fetch prices via the sync-prices Edge Function (server-side, Finnhub key stays secret).
+ * Falls back to direct API calls if the Edge Function is unavailable.
+ *
+ * @param {Array<{ticker: string, type: 'stock'|'crypto', coin_id?: string}>} positions
+ * @returns {Promise<Record<string, number|null>>} map of ticker → price
+ */
+export async function getPricesFromServer(positions) {
+  if (!positions || positions.length === 0) return {}
+
+  const symbols = positions.map(p => ({
+    symbol: p.ticker,
+    type: p.type,
+    coinGeckoId: p.type === 'crypto' ? (p.coin_id || p.ticker.toLowerCase()) : undefined,
+  }))
+
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-prices', {
+      body: { symbols },
+    })
+
+    if (error) throw error
+
+    // data.prices is keyed by ticker symbol
+    const result = {}
+    for (const p of positions) {
+      result[p.ticker] = data?.prices?.[p.ticker] ?? null
+    }
+    return result
+  } catch (err) {
+    console.warn('[priceService] sync-prices Edge Function failed, falling back to direct API:', err)
+    // Fallback: use legacy direct calls
+    const cryptoPositions = positions.filter(p => p.type === 'crypto')
+    const stockPositions = positions.filter(p => p.type === 'stock')
+
+    const [cryptoPrices, stockPrices] = await Promise.all([
+      cryptoPositions.length
+        ? getCryptoPrices(cryptoPositions.map(p => getCoinId(p)))
+        : {},
+      stockPositions.length
+        ? getStockPrices(stockPositions.map(p => p.ticker))
+        : {},
+    ])
+
+    const result = {}
+    for (const p of positions) {
+      if (p.type === 'crypto') result[p.ticker] = cryptoPrices[getCoinId(p)] ?? null
+      else result[p.ticker] = stockPrices[p.ticker] ?? null
+    }
+    return result
+  }
+}
+
 export async function getCryptoPrice(coinId) {
   try {
     const res = await fetch(

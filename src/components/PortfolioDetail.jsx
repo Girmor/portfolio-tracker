@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getCryptoPrices, getStockPrices, getCoinId, searchStocks, searchCrypto, resolveMissingCoinIds } from '../lib/priceService'
+import { getPricesFromServer, getCoinId, searchStocks, searchCrypto, resolveMissingCoinIds } from '../lib/priceService'
 import { formatMoney, formatNumber, formatPercent, formatDate, pnlColor } from '../lib/formatters'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
@@ -38,25 +38,12 @@ export default function PortfolioDetail() {
   }, [id])
 
   async function fetchPrices(positions) {
-    const cryptoTickers = positions.filter(p => p.type === 'crypto').map(p => getCoinId(p))
-    const stockTickers = positions.filter(p => p.type === 'stock').map(p => p.ticker)
-
-    const [cryptoPrices, stockPrices] = await Promise.all([
-      cryptoTickers.length ? getCryptoPrices(cryptoTickers) : {},
-      stockTickers.length ? getStockPrices(stockTickers) : {},
-    ])
-
+    const serverPrices = await getPricesFromServer(positions)
     setPrices(prev => {
       const merged = { ...prev }
-      positions.forEach(p => {
-        if (p.type === 'crypto') {
-          const newPrice = cryptoPrices[getCoinId(p)]
-          if (newPrice != null) merged[p.ticker] = newPrice
-        } else {
-          const newPrice = stockPrices[p.ticker]
-          if (newPrice != null) merged[p.ticker] = newPrice
-        }
-      })
+      for (const [ticker, price] of Object.entries(serverPrices)) {
+        if (price != null) merged[ticker] = price
+      }
       return merged
     })
   }

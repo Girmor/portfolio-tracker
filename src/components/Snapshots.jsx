@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { formatMoney, formatDate } from '../lib/formatters'
-import { getCryptoPrices, getStockPrices, getCoinId } from '../lib/priceService'
 
 export default function Snapshots() {
   const [snapshots, setSnapshots] = useState([])
@@ -37,97 +36,17 @@ export default function Snapshots() {
 
   async function saveSnapshot(label) {
     setSaving(true)
-    const [{ data: positions }, { data: trades }, { data: budget }, { data: portfolios }] = await Promise.all([
-      supabase.from('positions').select('*'),
-      supabase.from('trades').select('*'),
-      supabase.from('budget').select('*'),
-      supabase.from('portfolios').select('*'),
-    ])
-
-    const budgetTotal = (budget || []).reduce((sum, b) => {
-      if (b.currency === 'USD') return sum + Number(b.amount)
-      if (b.currency === 'EUR') return sum + Number(b.amount) * 1.08
-      if (b.currency === 'UAH') return sum + Number(b.amount) / 41.5
-      return sum + Number(b.amount)
-    }, 0)
-
-    // Fetch current prices for all positions
-    const allPositions = positions || []
-    const allTrades = trades || []
-    const cryptoPositions = allPositions.filter(p => p.type === 'crypto')
-    const stockPositions = allPositions.filter(p => p.type === 'stock')
-
-    const [cryptoPrices, stockPrices] = await Promise.all([
-      cryptoPositions.length ? getCryptoPrices(cryptoPositions.map(p => getCoinId(p))) : {},
-      stockPositions.length ? getStockPrices(stockPositions.map(p => p.ticker)) : {},
-    ])
-
-    const priceMap = {}
-    cryptoPositions.forEach(p => {
-      const price = cryptoPrices[getCoinId(p)]
-      if (price != null) priceMap[p.ticker] = price
-    })
-    stockPositions.forEach(p => {
-      const price = stockPrices[p.ticker]
-      if (price != null) priceMap[p.ticker] = price
-    })
-
-    // Compute per-portfolio totals
-    const byPortfolio = {}
-    let overallValue = 0, overallCost = 0
-
-    for (const pf of (portfolios || [])) {
-      const pfPositions = allPositions.filter(p => p.portfolio_id === pf.id)
-      let pfValue = Number(pf.cash_balance) || 0
-      let pfCost = 0
-
-      for (const pos of pfPositions) {
-        const posTrades = allTrades.filter(t => t.position_id === pos.id)
-        let buyQty = 0, buyCost = 0, sellQty = 0
-        posTrades.forEach(t => {
-          const qty = Number(t.quantity), price = Number(t.price)
-          if (t.type === 'buy') { buyQty += qty; buyCost += price * qty }
-          else { sellQty += qty }
-        })
-        const remainQty = buyQty - sellQty
-        const avgPrice = buyQty > 0 ? buyCost / buyQty : 0
-        const invested = avgPrice * remainQty
-        const currentPrice = priceMap[pos.ticker] ?? 0
-        const mktValue = remainQty * currentPrice
-
-        if (remainQty > 0) {
-          pfValue += mktValue
-          pfCost += invested
-        }
-      }
-
-      const pfPnl = pfValue - pfCost - (Number(pf.cash_balance) || 0)
-      const pfPnlPercent = pfCost > 0 ? (pfPnl / pfCost) * 100 : 0
-      byPortfolio[pf.id] = { totalValue: pfValue, totalCost: pfCost, totalPnl: pfPnl, totalPnlPercent: pfPnlPercent }
-      overallValue += pfValue
-      overallCost += pfCost
+    try {
+      const { error } = await supabase.functions.invoke('recalc-snapshots', {
+        body: { label: label || `Снепшот ${new Date().toLocaleString('uk-UA')}` },
+      })
+      if (error) throw error
+    } catch (err) {
+      console.error('[Snapshots] recalc-snapshots failed:', err)
+    } finally {
+      setSaving(false)
+      fetchSnapshots()
     }
-
-    const overallPnl = overallValue - overallCost
-    const overallPnlPercent = overallCost > 0 ? (overallPnl / overallCost) * 100 : 0
-
-    await supabase.from('snapshots').insert({
-      label: label || `Снепшот ${new Date().toLocaleString('uk-UA')}`,
-      data: {
-        positions: allPositions,
-        trades: allTrades,
-        budget: budget || [],
-        portfolios: portfolios || [],
-        budgetTotalUsd: budgetTotal,
-        computed: {
-          byPortfolio,
-          overall: { totalValue: overallValue, totalCost: overallCost, totalPnl: overallPnl, totalPnlPercent: overallPnlPercent },
-          prices: priceMap,
-        },
-      },
-    })
-    setSaving(false)
-    fetchSnapshots()
   }
 
   async function handleDelete(id) {
