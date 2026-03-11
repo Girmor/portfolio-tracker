@@ -1,5 +1,6 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
 const NAV = [
   { to: '/', label: 'Огляд', icon: '📊' },
@@ -19,6 +20,13 @@ const NAV = [
 
 export default function Layout({ children }) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/login', { replace: true })
+  }
 
   // Auto-expand group if current path matches a child
   const isChildActive = (group) =>
@@ -49,9 +57,9 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-56 bg-white border-r border-gray-200 p-4 flex flex-col gap-0.5 shrink-0">
+      <aside className="w-56 bg-white border-r border-gray-200 p-4 flex flex-col shrink-0">
         <h1 className="text-lg font-bold text-gray-800 mb-4 px-3">Portfolio Tracker</h1>
-        <nav className="flex flex-col gap-0.5">
+        <nav className="flex flex-col gap-0.5 flex-1">
           {NAV.map((item, idx) => {
             if (item.children) {
               const open = expandedGroups[idx]
@@ -115,6 +123,17 @@ export default function Layout({ children }) {
             )
           })}
         </nav>
+
+        <div className="mt-auto pt-4 border-t border-gray-100">
+          <p className="text-xs text-gray-400 px-3 mb-2 truncate">{user?.email}</p>
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <span>→</span>
+            Вийти
+          </button>
+        </div>
       </aside>
       <main className="flex-1 p-6 overflow-auto">
         {children}
