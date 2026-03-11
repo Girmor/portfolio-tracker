@@ -8,8 +8,8 @@ const NAV = [
     icon: '💼',
     children: [
       { to: '/portfolios', label: 'Портфелі', icon: '💼' },
-      { to: '/trades', label: 'Угоди', icon: '📋' },
       { to: '/dividends', label: 'Дивіденди', icon: '💵' },
+      { to: '/trades', label: 'Угоди', icon: '📋' },
       { to: '/import', label: 'Імпорт', icon: '📥' },
     ],
   },
