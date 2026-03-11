@@ -18,22 +18,21 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Permissive "allow all" policies for Phase 1 (replaced in Phase 2)
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON portfolios    FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON positions     FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON trades        FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON dividends     FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON imports       FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON import_rows   FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON snapshots     FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON assets        FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON price_cache   FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all_phase1" ON cash_adjustments FOR ALL USING (true) WITH CHECK (true);
+-- Drop existing policies if any, then recreate
+DO $$
+DECLARE
+  tbl text;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY['portfolios','positions','trades','dividends','imports','import_rows','snapshots','assets','price_cache','cash_adjustments']
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS "allow_all_phase1" ON %I', tbl);
+    EXECUTE format('CREATE POLICY "allow_all_phase1" ON %I FOR ALL USING (true) WITH CHECK (true)', tbl);
+  END LOOP;
+END $$;
 
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'budget' AND table_schema = 'public') THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'budget' AND policyname = 'allow_all_phase1') THEN
-      EXECUTE 'CREATE POLICY "allow_all_phase1" ON budget FOR ALL USING (true) WITH CHECK (true)';
-    END IF;
+    EXECUTE 'DROP POLICY IF EXISTS "allow_all_phase1" ON budget';
+    EXECUTE 'CREATE POLICY "allow_all_phase1" ON budget FOR ALL USING (true) WITH CHECK (true)';
   END IF;
 END $$;
