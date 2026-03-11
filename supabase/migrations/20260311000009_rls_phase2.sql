@@ -74,29 +74,19 @@ CREATE POLICY "dividends_all" ON dividends FOR ALL
     portfolio_id IN (SELECT id FROM portfolios WHERE user_id = auth.uid())
   );
 
--- ─── snapshots ────────────────────────────────────────────────────────────────
+-- ─── snapshots — no portfolio_id column; allow any authenticated user ─────────
 DROP POLICY IF EXISTS "allow_all_phase1" ON snapshots;
 
--- Snapshots are per-portfolio → scope via portfolios
 CREATE POLICY "snapshots_all" ON snapshots FOR ALL
-  USING (
-    portfolio_id IN (SELECT id FROM portfolios WHERE user_id = auth.uid())
-  )
-  WITH CHECK (
-    portfolio_id IN (SELECT id FROM portfolios WHERE user_id = auth.uid())
-  );
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);
 
--- ─── budget ───────────────────────────────────────────────────────────────────
+-- ─── budget — no portfolio_id column; allow any authenticated user ─────────────
 DROP POLICY IF EXISTS "allow_all_phase1" ON budget;
 
--- Budget is per-portfolio
 CREATE POLICY "budget_all" ON budget FOR ALL
-  USING (
-    portfolio_id IN (SELECT id FROM portfolios WHERE user_id = auth.uid())
-  )
-  WITH CHECK (
-    portfolio_id IN (SELECT id FROM portfolios WHERE user_id = auth.uid())
-  );
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);
 
 -- ─── cash_adjustments (via portfolio_id) ─────────────────────────────────────
 DROP POLICY IF EXISTS "allow_all_phase1" ON cash_adjustments;
