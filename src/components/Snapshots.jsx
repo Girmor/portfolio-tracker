@@ -1,58 +1,48 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { supabase } from '../lib/supabase'
+import { toast } from 'sonner'
 import { formatMoney, formatDate } from '../lib/formatters'
+import { useSnapshotsQuery, useDeleteSnapshotMutation, useSaveSnapshotMutation } from '../hooks/useSnapshotsQuery'
+import { supabase } from '../lib/supabase'
 
 export default function Snapshots() {
-  const [snapshots, setSnapshots] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const { data: snapshots = [], isLoading } = useSnapshotsQuery()
+  const deleteSnapshot = useDeleteSnapshotMutation()
+  const saveSnapshot = useSaveSnapshotMutation()
 
+  // Auto-snapshot once per day
   useEffect(() => {
-    fetchSnapshots()
+    async function autoSnapshot() {
+      const today = new Date().toISOString().split('T')[0]
+      const { data: existing } = await supabase
+        .from('snapshots')
+        .select('id')
+        .gte('created_at', today + 'T00:00:00')
+        .lte('created_at', today + 'T23:59:59')
+        .limit(1)
+      if (existing && existing.length > 0) return
+      saveSnapshot.mutate(`Авто ${today}`)
+    }
     autoSnapshot()
   }, [])
 
-  async function fetchSnapshots() {
-    setLoading(true)
-    const { data } = await supabase.from('snapshots').select('*').order('created_at', { ascending: false })
-    setSnapshots(data || [])
-    setLoading(false)
-  }
-
-  async function autoSnapshot() {
-    const today = new Date().toISOString().split('T')[0]
-    const { data: existing } = await supabase
-      .from('snapshots')
-      .select('id')
-      .gte('created_at', today + 'T00:00:00')
-      .lte('created_at', today + 'T23:59:59')
-      .limit(1)
-    if (existing && existing.length > 0) return
-
-    await saveSnapshot(`Авто ${today}`)
-    fetchSnapshots()
-  }
-
-  async function saveSnapshot(label) {
-    setSaving(true)
+  async function handleSave() {
     try {
-      const { error } = await supabase.functions.invoke('recalc-snapshots', {
-        body: { label: label || `Снепшот ${new Date().toLocaleString('uk-UA')}` },
-      })
-      if (error) throw error
+      await saveSnapshot.mutateAsync()
+      toast.success('Снепшот збережено')
     } catch (err) {
-      console.error('[Snapshots] recalc-snapshots failed:', err)
-    } finally {
-      setSaving(false)
-      fetchSnapshots()
+      toast.error(err.message || 'Помилка збереження')
     }
   }
 
   async function handleDelete(id) {
     if (!confirm('Видалити цей снепшот?')) return
-    await supabase.from('snapshots').delete().eq('id', id)
-    fetchSnapshots()
+    try {
+      await deleteSnapshot.mutateAsync(id)
+      toast.success('Снепшот видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   const chartData = [...snapshots]
@@ -62,18 +52,29 @@ export default function Snapshots() {
       budget: s.data?.budgetTotalUsd || 0,
     }))
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
+  if (isLoading) {
+    return (
+      <div className="animate-pulse">
+        <div className="flex items-center justify-between mb-6">
+          <div className="h-8 bg-gray-200 rounded w-36" />
+          <div className="h-9 bg-gray-200 rounded w-40" />
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 h-64 mb-6" />
+        <div className="bg-white rounded-xl border border-gray-200 h-48" />
+      </div>
+    )
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Снепшоти</h2>
         <button
-          onClick={() => saveSnapshot()}
-          disabled={saving}
+          onClick={handleSave}
+          disabled={saveSnapshot.isPending}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
         >
-          {saving ? 'Збереження...' : 'Зберегти снепшот'}
+          {saveSnapshot.isPending ? 'Збереження...' : 'Зберегти снепшот'}
         </button>
       </div>
 

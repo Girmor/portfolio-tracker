@@ -1,70 +1,101 @@
-import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState, useMemo } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+} from '@tanstack/react-table'
 import { formatMoney, formatDate } from '../lib/formatters'
+import {
+  useTradesQuery,
+  useUpdateTradeMutation,
+  useDeleteTradeMutation,
+  useUpdateAdjustmentMutation,
+  useDeleteAdjustmentMutation,
+} from '../hooks/useTradesQuery'
 
 const TABS = [
   { key: 'trades', label: 'Купівля/продаж' },
   { key: 'adjustments', label: 'Коригування' },
 ]
 
+const tradeSchema = z.object({
+  type: z.enum(['buy', 'sell']),
+  price: z.coerce.number().positive('Ціна має бути > 0'),
+  quantity: z.coerce.number().positive('Кількість має бути > 0'),
+  date: z.string().min(1, 'Дата обов\'язкова'),
+  notes: z.string().optional(),
+})
+
+const adjSchema = z.object({
+  new_balance: z.coerce.number().min(0, 'Баланс не може бути від\'ємним'),
+  date: z.string().min(1, 'Дата обов\'язкова'),
+  notes: z.string().optional(),
+})
+
+function SortableHeader({ column, children, align = 'left' }) {
+  const sorted = column.getIsSorted()
+  return (
+    <button
+      className={`flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900 ${align === 'right' ? 'ml-auto' : ''}`}
+      onClick={() => column.toggleSorting(sorted === 'asc')}
+    >
+      {children}
+      <span className="text-[10px] text-gray-400">{sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}</span>
+    </button>
+  )
+}
+
+function TableSkeleton({ cols = 8 }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden animate-pulse">
+      <div className="h-10 bg-gray-100 border-b border-gray-200" />
+      {[1, 2, 3, 4, 5].map(i => (
+        <div key={i} className="flex gap-4 px-4 py-3 border-b border-gray-100">
+          {Array.from({ length: cols }).map((_, j) => (
+            <div key={j} className="h-4 bg-gray-100 rounded flex-1" />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function TradeHistory() {
   const [tab, setTab] = useState('trades')
-  const [trades, setTrades] = useState([])
-  const [adjustments, setAdjustments] = useState([])
-  const [portfolios, setPortfolios] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  // Filters
   const [filterPortfolio, setFilterPortfolio] = useState('')
   const [filterTicker, setFilterTicker] = useState('')
-
-  // Edit modals
   const [editTrade, setEditTrade] = useState(null)
   const [editAdj, setEditAdj] = useState(null)
-  const [tradeForm, setTradeForm] = useState({ type: 'buy', price: '', quantity: '', date: '', notes: '' })
-  const [adjForm, setAdjForm] = useState({ new_balance: '', date: '', notes: '' })
+  const [tradeSorting, setTradeSorting] = useState([{ id: 'date', desc: true }])
+  const [adjSorting, setAdjSorting] = useState([{ id: 'date', desc: true }])
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const [{ data: pData }, { data: tData }, { data: aData }] = await Promise.all([
-      supabase.from('portfolios').select('id, name').order('name'),
-      supabase
-        .from('trades')
-        .select('*, position:positions!inner(id, ticker, name, type, portfolio_id, portfolio:portfolios!inner(id, name))')
-        .order('date', { ascending: false }),
-      supabase
-        .from('adjustments')
-        .select('*, portfolio:portfolios!inner(id, name)')
-        .order('date', { ascending: false }),
-    ])
-    setPortfolios(pData || [])
-    setTrades(tData || [])
-    setAdjustments(aData || [])
-    setLoading(false)
-  }, [])
+  const { data, isLoading } = useTradesQuery()
+  const trades = data?.trades || []
+  const adjustments = data?.adjustments || []
+  const portfolios = data?.portfolios || []
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const updateTrade = useUpdateTradeMutation()
+  const deleteTrade = useDeleteTradeMutation()
+  const updateAdj = useUpdateAdjustmentMutation()
+  const deleteAdj = useDeleteAdjustmentMutation()
 
-  // Unique tickers from trades
-  const allTickers = [...new Set(trades.map(t => t.position?.ticker).filter(Boolean))].sort()
-
-  // Filtered trades
-  const filteredTrades = trades.filter(t => {
-    if (filterPortfolio && t.position?.portfolio?.id !== filterPortfolio) return false
-    if (filterTicker && t.position?.ticker !== filterTicker) return false
-    return true
+  const { register: registerTrade, handleSubmit: handleSubmitTrade, reset: resetTrade, formState: { errors: tradeErrors } } = useForm({
+    resolver: zodResolver(tradeSchema),
   })
 
-  // Filtered adjustments
-  const filteredAdjustments = adjustments.filter(a => {
-    if (filterPortfolio && a.portfolio?.id !== filterPortfolio) return false
-    return true
+  const { register: registerAdj, handleSubmit: handleSubmitAdj, reset: resetAdj, formState: { errors: adjErrors } } = useForm({
+    resolver: zodResolver(adjSchema),
   })
 
-  // Trade CRUD
   function openEditTrade(trade) {
     setEditTrade(trade)
-    setTradeForm({
+    resetTrade({
       type: trade.type,
       price: String(trade.price),
       quantity: String(trade.quantity),
@@ -73,61 +104,237 @@ export default function TradeHistory() {
     })
   }
 
-  async function handleUpdateTrade(e) {
-    e.preventDefault()
-    await supabase
-      .from('trades')
-      .update({
-        type: tradeForm.type,
-        price: Number(tradeForm.price),
-        quantity: Number(tradeForm.quantity),
-        date: tradeForm.date,
-        notes: tradeForm.notes || null,
+  async function onUpdateTrade(values) {
+    try {
+      await updateTrade.mutateAsync({
+        id: editTrade.id,
+        data: {
+          type: values.type,
+          price: values.price,
+          quantity: values.quantity,
+          date: values.date,
+          notes: values.notes || null,
+        },
       })
-      .eq('id', editTrade.id)
-    setEditTrade(null)
-    fetchData()
+      setEditTrade(null)
+      toast.success('Угоду оновлено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   async function handleDeleteTrade(id) {
     if (!confirm('Видалити цю угоду?')) return
-    await supabase.from('trades').delete().eq('id', id)
-    fetchData()
+    try {
+      await deleteTrade.mutateAsync(id)
+      toast.success('Угоду видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  // Adjustment CRUD
   function openEditAdj(adj) {
     setEditAdj(adj)
-    setAdjForm({
+    resetAdj({
       new_balance: String(adj.new_balance),
       date: adj.date,
       notes: adj.notes || '',
     })
   }
 
-  async function handleUpdateAdj(e) {
-    e.preventDefault()
-    const newBal = Number(adjForm.new_balance)
-    if (isNaN(newBal) || newBal < 0) return
-    await supabase
-      .from('adjustments')
-      .update({
-        new_balance: newBal,
-        date: adjForm.date,
-        notes: adjForm.notes || null,
+  async function onUpdateAdj(values) {
+    try {
+      await updateAdj.mutateAsync({
+        id: editAdj.id,
+        data: {
+          new_balance: values.new_balance,
+          date: values.date,
+          notes: values.notes || null,
+        },
       })
-      .eq('id', editAdj.id)
-    setEditAdj(null)
-    fetchData()
+      setEditAdj(null)
+      toast.success('Коригування оновлено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   async function handleDeleteAdj(adj) {
     if (!confirm('Видалити це коригування?')) return
-    await supabase.from('adjustments').delete().eq('id', adj.id)
-    fetchData()
+    try {
+      await deleteAdj.mutateAsync(adj.id)
+      toast.success('Коригування видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
+  const allTickers = useMemo(() =>
+    [...new Set(trades.map(t => t.position?.ticker).filter(Boolean))].sort()
+  , [trades])
+
+  const filteredTrades = useMemo(() => trades.filter(t => {
+    if (filterPortfolio && t.position?.portfolio?.id !== filterPortfolio) return false
+    if (filterTicker && t.position?.ticker !== filterTicker) return false
+    return true
+  }), [trades, filterPortfolio, filterTicker])
+
+  const filteredAdjustments = useMemo(() => adjustments.filter(a => {
+    if (filterPortfolio && a.portfolio?.id !== filterPortfolio) return false
+    return true
+  }), [adjustments, filterPortfolio])
+
+  // Trades TanStack Table
+  const tradesColumns = useMemo(() => [
+    {
+      id: 'date',
+      accessorFn: row => row.date,
+      header: ({ column }) => <SortableHeader column={column}>Дата</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{formatDate(getValue())}</span>,
+    },
+    {
+      id: 'portfolio',
+      accessorFn: row => row.position?.portfolio?.name || '',
+      header: ({ column }) => <SortableHeader column={column}>Портфель</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{getValue() || '—'}</span>,
+    },
+    {
+      id: 'ticker',
+      accessorFn: row => row.position?.ticker || '',
+      header: ({ column }) => <SortableHeader column={column}>Тікер</SortableHeader>,
+      cell: ({ getValue }) => <span className="font-medium text-gray-800">{getValue()}</span>,
+    },
+    {
+      id: 'type',
+      accessorFn: row => row.type,
+      header: ({ column }) => <SortableHeader column={column}>Тип</SortableHeader>,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5">
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${row.original.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {row.original.type === 'buy' ? 'Купівля' : 'Продаж'}
+          </span>
+          {row.original.import_id && (
+            <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
+              📥 Імпорт
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'price',
+      accessorFn: row => Number(row.price),
+      header: ({ column }) => <SortableHeader column={column} align="right">Ціна</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{formatMoney(getValue())}</span>,
+    },
+    {
+      id: 'quantity',
+      accessorFn: row => Number(row.quantity),
+      header: ({ column }) => <SortableHeader column={column} align="right">Кількість</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{getValue()}</span>,
+    },
+    {
+      id: 'total',
+      accessorFn: row => Number(row.price) * Number(row.quantity),
+      header: ({ column }) => <SortableHeader column={column} align="right">Сума</SortableHeader>,
+      cell: ({ getValue }) => <span className="font-medium text-gray-800">{formatMoney(getValue())}</span>,
+    },
+    {
+      id: 'notes',
+      accessorFn: row => row.notes || '',
+      header: 'Нотатки',
+      cell: ({ getValue }) => <span className="text-gray-500 text-xs truncate max-w-[150px]">{getValue() || '—'}</span>,
+      enableSorting: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <div className="flex gap-2 justify-end whitespace-nowrap">
+          <button onClick={() => openEditTrade(row.original)} className="text-blue-600 hover:text-blue-800 text-xs">Ред.</button>
+          <button onClick={() => handleDeleteTrade(row.original.id)} className="text-red-500 hover:text-red-700 text-xs">Вид.</button>
+        </div>
+      ),
+      enableSorting: false,
+    },
+  ], [])
+
+  const tradesTable = useReactTable({
+    data: filteredTrades,
+    columns: tradesColumns,
+    state: { sorting: tradeSorting },
+    onSortingChange: setTradeSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
+
+  // Adjustments TanStack Table
+  const adjColumns = useMemo(() => [
+    {
+      id: 'date',
+      accessorFn: row => row.date,
+      header: ({ column }) => <SortableHeader column={column}>Дата</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{formatDate(getValue())}</span>,
+    },
+    {
+      id: 'portfolio',
+      accessorFn: row => row.portfolio?.name || '',
+      header: ({ column }) => <SortableHeader column={column}>Портфель</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{getValue() || '—'}</span>,
+    },
+    {
+      id: 'previous',
+      accessorFn: row => Number(row.previous_balance),
+      header: ({ column }) => <SortableHeader column={column} align="right">Попередній</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{formatMoney(getValue())}</span>,
+    },
+    {
+      id: 'new',
+      accessorFn: row => Number(row.new_balance),
+      header: ({ column }) => <SortableHeader column={column} align="right">Новий</SortableHeader>,
+      cell: ({ getValue }) => <span className="font-medium text-gray-800">{formatMoney(getValue())}</span>,
+    },
+    {
+      id: 'diff',
+      accessorFn: row => Number(row.new_balance) - Number(row.previous_balance),
+      header: ({ column }) => <SortableHeader column={column} align="right">Різниця</SortableHeader>,
+      cell: ({ getValue }) => {
+        const diff = getValue()
+        return (
+          <span className={`font-medium ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {diff >= 0 ? '+' : ''}{formatMoney(diff)}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'notes',
+      accessorFn: row => row.notes || '',
+      header: 'Нотатки',
+      cell: ({ getValue }) => <span className="text-gray-500 text-xs truncate max-w-[150px]">{getValue() || '—'}</span>,
+      enableSorting: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <div className="flex gap-2 justify-end whitespace-nowrap">
+          <button onClick={() => openEditAdj(row.original)} className="text-blue-600 hover:text-blue-800 text-xs">Ред.</button>
+          <button onClick={() => handleDeleteAdj(row.original)} className="text-red-500 hover:text-red-700 text-xs">Вид.</button>
+        </div>
+      ),
+      enableSorting: false,
+    },
+  ], [])
+
+  const adjTable = useReactTable({
+    data: filteredAdjustments,
+    columns: adjColumns,
+    state: { sorting: adjSorting },
+    onSortingChange: setAdjSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
 
   return (
     <div>
@@ -178,66 +385,31 @@ export default function TradeHistory() {
 
       {/* Trades Tab */}
       {tab === 'trades' && (
+        isLoading ? <TableSkeleton cols={9} /> :
         filteredTrades.length === 0 ? (
           <p className="text-gray-500 text-center py-8">Немає угод</p>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm min-w-[800px]">
               <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Дата</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Портфель</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Тікер</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Тип</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Ціна</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Кількість</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Сума</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Нотатки</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Дії</th>
-                </tr>
+                {tradesTable.getHeaderGroups().map(hg => (
+                  <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                    {hg.headers.map(header => (
+                      <th key={header.id} className={`py-3 px-3 ${['price', 'quantity', 'total'].includes(header.id) ? 'text-right' : 'text-left'}`}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
               </thead>
               <tbody>
-                {filteredTrades.map(t => (
-                  <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-3 text-gray-700">{formatDate(t.date)}</td>
-                    <td className="py-3 px-3 text-gray-700">{t.position?.portfolio?.name || '—'}</td>
-                    <td className="py-3 px-3">
-                      <span className="font-medium text-gray-800">{t.position?.ticker}</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                        t.type === 'buy'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        {t.type === 'buy' ? 'Купівля' : 'Продаж'}
-                      </span>
-                      {t.import_id && (
-                        <span className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
-                          📥 Імпорт
-                        </span>
-                      )}
-                    </td>
-                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(t.price)}</td>
-                    <td className="text-right py-3 px-3 text-gray-700">{t.quantity}</td>
-                    <td className="text-right py-3 px-3 font-medium text-gray-800">
-                      {formatMoney(Number(t.price) * Number(t.quantity))}
-                    </td>
-                    <td className="py-3 px-3 text-gray-500 text-xs max-w-[150px] truncate">{t.notes || '—'}</td>
-                    <td className="text-right py-3 px-3 whitespace-nowrap">
-                      <button
-                        onClick={() => openEditTrade(t)}
-                        className="text-blue-600 hover:text-blue-800 text-xs mr-2"
-                      >
-                        Ред.
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTrade(t.id)}
-                        className="text-red-500 hover:text-red-700 text-xs"
-                      >
-                        Вид.
-                      </button>
-                    </td>
+                {tradesTable.getRowModel().rows.map(row => (
+                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className={`py-3 px-3 ${['price', 'quantity', 'total', 'actions'].includes(cell.column.id) ? 'text-right' : ''}`}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -248,52 +420,33 @@ export default function TradeHistory() {
 
       {/* Adjustments Tab */}
       {tab === 'adjustments' && (
+        isLoading ? <TableSkeleton cols={7} /> :
         filteredAdjustments.length === 0 ? (
           <p className="text-gray-500 text-center py-8">Немає коригувань</p>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm min-w-[700px]">
               <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Дата</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Портфель</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Попередній</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Новий</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Різниця</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-600">Нотатки</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-600">Дії</th>
-                </tr>
+                {adjTable.getHeaderGroups().map(hg => (
+                  <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                    {hg.headers.map(header => (
+                      <th key={header.id} className={`py-3 px-3 ${['previous', 'new', 'diff'].includes(header.id) ? 'text-right' : 'text-left'}`}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
               </thead>
               <tbody>
-                {filteredAdjustments.map(a => {
-                  const diff = Number(a.new_balance) - Number(a.previous_balance)
-                  return (
-                    <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-3 text-gray-700">{formatDate(a.date)}</td>
-                      <td className="py-3 px-3 text-gray-700">{a.portfolio?.name || '—'}</td>
-                      <td className="text-right py-3 px-3 text-gray-700">{formatMoney(a.previous_balance)}</td>
-                      <td className="text-right py-3 px-3 font-medium text-gray-800">{formatMoney(a.new_balance)}</td>
-                      <td className={`text-right py-3 px-3 font-medium ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {diff >= 0 ? '+' : ''}{formatMoney(diff)}
+                {adjTable.getRowModel().rows.map(row => (
+                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className={`py-3 px-3 ${['previous', 'new', 'diff', 'actions'].includes(cell.column.id) ? 'text-right' : ''}`}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
-                      <td className="py-3 px-3 text-gray-500 text-xs max-w-[150px] truncate">{a.notes || '—'}</td>
-                      <td className="text-right py-3 px-3 whitespace-nowrap">
-                        <button
-                          onClick={() => openEditAdj(a)}
-                          className="text-blue-600 hover:text-blue-800 text-xs mr-2"
-                        >
-                          Ред.
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAdj(a)}
-                          className="text-red-500 hover:text-red-700 text-xs"
-                        >
-                          Вид.
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -303,7 +456,7 @@ export default function TradeHistory() {
       {/* Edit Trade Modal */}
       {editTrade && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={handleUpdateTrade} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
+          <form onSubmit={handleSubmitTrade(onUpdateTrade)} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
             <h3 className="font-semibold text-gray-800 mb-4">
               Редагувати угоду — {editTrade.position?.ticker}
             </h3>
@@ -311,8 +464,7 @@ export default function TradeHistory() {
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Тип</label>
                 <select
-                  value={tradeForm.type}
-                  onChange={e => setTradeForm({ ...tradeForm, type: e.target.value })}
+                  {...registerTrade('type')}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="buy">Купівля</option>
@@ -321,53 +473,27 @@ export default function TradeHistory() {
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Дата</label>
-                <input
-                  type="date"
-                  value={tradeForm.date}
-                  onChange={e => setTradeForm({ ...tradeForm, date: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="date" {...registerTrade('date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {tradeErrors.date && <p className="text-red-500 text-xs mt-1">{tradeErrors.date.message}</p>}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Ціна</label>
-                <input
-                  type="number"
-                  step="any"
-                  required
-                  value={tradeForm.price}
-                  onChange={e => setTradeForm({ ...tradeForm, price: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="number" step="any" {...registerTrade('price')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {tradeErrors.price && <p className="text-red-500 text-xs mt-1">{tradeErrors.price.message}</p>}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Кількість</label>
-                <input
-                  type="number"
-                  step="any"
-                  required
-                  value={tradeForm.quantity}
-                  onChange={e => setTradeForm({ ...tradeForm, quantity: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="number" step="any" {...registerTrade('quantity')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {tradeErrors.quantity && <p className="text-red-500 text-xs mt-1">{tradeErrors.quantity.message}</p>}
               </div>
             </div>
             <div className="mb-4">
               <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
-              <input
-                type="text"
-                value={tradeForm.notes}
-                onChange={e => setTradeForm({ ...tradeForm, notes: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Необов'язково"
-              />
+              <input type="text" {...registerTrade('notes')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setEditTrade(null)} className="text-gray-500 px-4 py-2 text-sm">
-                Скасувати
-              </button>
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-                Зберегти
-              </button>
+              <button type="button" onClick={() => setEditTrade(null)} className="text-gray-500 px-4 py-2 text-sm">Скасувати</button>
+              <button type="submit" disabled={updateTrade.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Зберегти</button>
             </div>
           </form>
         </div>
@@ -376,18 +502,14 @@ export default function TradeHistory() {
       {/* Edit Adjustment Modal */}
       {editAdj && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={handleUpdateAdj} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
+          <form onSubmit={handleSubmitAdj(onUpdateAdj)} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
             <h3 className="font-semibold text-gray-800 mb-4">
               Редагувати коригування — {editAdj.portfolio?.name}
             </h3>
             <div className="mb-3">
               <label className="block text-sm text-gray-600 mb-1">Дата</label>
-              <input
-                type="date"
-                value={adjForm.date}
-                onChange={e => setAdjForm({ ...adjForm, date: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="date" {...registerAdj('date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {adjErrors.date && <p className="text-red-500 text-xs mt-1">{adjErrors.date.message}</p>}
             </div>
             <div className="mb-3">
               <label className="block text-sm text-gray-600 mb-1">Попередній баланс</label>
@@ -397,33 +519,16 @@ export default function TradeHistory() {
             </div>
             <div className="mb-3">
               <label className="block text-sm text-gray-600 mb-1">Новий баланс</label>
-              <input
-                type="number"
-                step="any"
-                required
-                min="0"
-                value={adjForm.new_balance}
-                onChange={e => setAdjForm({ ...adjForm, new_balance: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="number" step="any" {...registerAdj('new_balance')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {adjErrors.new_balance && <p className="text-red-500 text-xs mt-1">{adjErrors.new_balance.message}</p>}
             </div>
             <div className="mb-4">
               <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
-              <input
-                type="text"
-                value={adjForm.notes}
-                onChange={e => setAdjForm({ ...adjForm, notes: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Необов'язково"
-              />
+              <input type="text" {...registerAdj('notes')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setEditAdj(null)} className="text-gray-500 px-4 py-2 text-sm">
-                Скасувати
-              </button>
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-                Зберегти
-              </button>
+              <button type="button" onClick={() => setEditAdj(null)} className="text-gray-500 px-4 py-2 text-sm">Скасувати</button>
+              <button type="submit" disabled={updateAdj.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Зберегти</button>
             </div>
           </form>
         </div>

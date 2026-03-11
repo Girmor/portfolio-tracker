@@ -1,59 +1,84 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
+import {
+  usePortfoliosQuery,
+  useCreatePortfolioMutation,
+  useUpdatePortfolioMutation,
+  useDeletePortfolioMutation,
+} from '../hooks/usePortfoliosQuery'
+
+const schema = z.object({
+  name: z.string().min(1, "Назва обов'язкова"),
+  description: z.string().optional(),
+})
+
+function PortfolioSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+      <div className="h-5 bg-gray-200 rounded w-2/3 mb-3" />
+      <div className="h-3 bg-gray-100 rounded w-1/2 mb-3" />
+      <div className="h-3 bg-gray-100 rounded w-1/4" />
+    </div>
+  )
+}
 
 export default function Portfolios() {
-  const [portfolios, setPortfolios] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ name: '', description: '' })
 
-  useEffect(() => { fetchPortfolios() }, [])
+  const { data: portfolios = [], isLoading } = usePortfoliosQuery()
+  const createMutation = useCreatePortfolioMutation()
+  const updateMutation = useUpdatePortfolioMutation()
+  const deleteMutation = useDeletePortfolioMutation()
 
-  async function fetchPortfolios() {
-    setLoading(true)
-    const { data } = await supabase
-      .from('portfolios')
-      .select('*, positions(id, ticker, type)')
-      .order('created_at', { ascending: true })
-    setPortfolios(data || [])
-    setLoading(false)
-  }
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { name: '', description: '' },
+  })
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (editingId) {
-      await supabase.from('portfolios').update(form).eq('id', editingId)
-    } else {
-      await supabase.from('portfolios').insert(form)
+  async function onSubmit(values) {
+    try {
+      if (editingId) {
+        await updateMutation.mutateAsync({ id: editingId, data: values })
+        toast.success('Портфель оновлено')
+      } else {
+        await createMutation.mutateAsync(values)
+        toast.success('Портфель створено')
+      }
+      reset()
+      setShowForm(false)
+      setEditingId(null)
+    } catch (err) {
+      toast.error(err.message)
     }
-    setForm({ name: '', description: '' })
-    setShowForm(false)
-    setEditingId(null)
-    fetchPortfolios()
-  }
-
-  async function handleDelete(id) {
-    if (!confirm('Видалити цей портфель?')) return
-    await supabase.from('portfolios').delete().eq('id', id)
-    fetchPortfolios()
   }
 
   function startEdit(p) {
     setEditingId(p.id)
-    setForm({ name: p.name, description: p.description || '' })
+    reset({ name: p.name, description: p.description || '' })
     setShowForm(true)
   }
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
+  async function handleDelete(id) {
+    if (!confirm('Видалити цей портфель?')) return
+    try {
+      await deleteMutation.mutateAsync(id)
+      toast.success('Портфель видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Портфелі</h2>
         <button
-          onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', description: '' }) }}
+          onClick={() => { setShowForm(true); setEditingId(null); reset({ name: '', description: '' }) }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
         >
           + Новий портфель
@@ -61,47 +86,53 @@ export default function Portfolios() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <h3 className="font-semibold text-gray-700 mb-3">
             {editingId ? 'Редагувати портфель' : 'Новий портфель'}
           </h3>
-          <div className="flex gap-3 items-end">
+          <div className="flex gap-3 items-start">
             <div className="flex-1">
               <label className="block text-sm text-gray-600 mb-1">Назва</label>
               <input
-                type="text"
-                required
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
+                {...register('name')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Довгострокові акції"
               />
+              {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
             </div>
             <div className="flex-1">
               <label className="block text-sm text-gray-600 mb-1">Опис</label>
               <input
-                type="text"
-                value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
+                {...register('description')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Акції на 5+ років"
               />
             </div>
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              {editingId ? 'Зберегти' : 'Створити'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowForm(false); setEditingId(null) }}
-              className="text-gray-500 px-3 py-2 text-sm hover:text-gray-700"
-            >
-              Скасувати
-            </button>
+            <div className="flex gap-2 pt-6">
+              <button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {editingId ? 'Зберегти' : 'Створити'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowForm(false); setEditingId(null) }}
+                className="text-gray-500 px-3 py-2 text-sm hover:text-gray-700"
+              >
+                Скасувати
+              </button>
+            </div>
           </div>
         </form>
       )}
 
-      {portfolios.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <PortfolioSkeleton key={i} />)}
+        </div>
+      ) : portfolios.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <p className="text-lg mb-2">Немає портфелів</p>
           <p className="text-sm">Створіть перший портфель, щоб почати відстежувати інвестиції</p>

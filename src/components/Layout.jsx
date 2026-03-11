@@ -1,5 +1,6 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { useIsFetching } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 
 const NAV = [
@@ -22,6 +23,7 @@ export default function Layout({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
+  const isFetching = useIsFetching()
 
   async function handleSignOut() {
     await signOut()
@@ -57,6 +59,12 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {/* Global fetch indicator */}
+      {isFetching > 0 && (
+        <div className="fixed top-0 left-0 right-0 h-0.5 bg-blue-200 z-50 overflow-hidden">
+          <div className="h-full bg-blue-500 animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: '60%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+        </div>
+      )}
       <aside className="w-56 bg-white border-r border-gray-200 p-4 flex flex-col shrink-0">
         <h1 className="text-lg font-bold text-gray-800 mb-4 px-3">Portfolio Tracker</h1>
         <nav className="flex flex-col gap-0.5 flex-1">

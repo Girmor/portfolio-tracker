@@ -1,60 +1,106 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { getPricesFromServer, getCoinId, searchStocks, searchCrypto, resolveMissingCoinIds } from '../lib/priceService'
-import { formatMoney, formatNumber, formatPercent, formatDate, pnlColor } from '../lib/formatters'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+} from '@tanstack/react-table'
+import { formatMoney, formatNumber, formatPercent, pnlColor } from '../lib/formatters'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { searchStocks, searchCrypto } from '../lib/priceService'
+import {
+  usePortfolioDetailQuery,
+  useAddPositionMutation,
+  useDeletePositionMutation,
+  useAddTradeMutation,
+  useCashAdjustmentMutation,
+} from '../hooks/usePortfoliosQuery'
+import { usePricesQuery } from '../hooks/usePricesQuery'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
+const tradeSchema = z.object({
+  type: z.enum(['buy', 'sell']),
+  price: z.coerce.number().positive('Ціна має бути > 0'),
+  quantity: z.coerce.number().positive('Кількість має бути > 0'),
+  date: z.string().min(1, 'Дата обов\'язкова'),
+  notes: z.string().optional(),
+})
+
+const cashSchema = z.object({
+  date: z.string().min(1, 'Дата обов\'язкова'),
+  newBalance: z.coerce.number().min(0, 'Баланс не може бути від\'ємним'),
+})
+
+function SortableHeader({ column, children }) {
+  const sorted = column.getIsSorted()
+  return (
+    <button
+      className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900"
+      onClick={() => column.toggleSorting(sorted === 'asc')}
+    >
+      {children}
+      <span className="text-[10px] text-gray-400">
+        {sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}
+      </span>
+    </button>
+  )
+}
+
+function SkeletonDetail() {
+  return (
+    <div className="animate-pulse">
+      <div className="grid grid-cols-2 gap-3 mb-6 lg:w-2/3">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
+            <div className="h-6 bg-gray-200 rounded w-3/4" />
+          </div>
+        ))}
+      </div>
+      <div className="h-12 bg-gray-200 rounded mb-4" />
+      <div className="bg-white rounded-xl border border-gray-200 h-48" />
+    </div>
+  )
+}
+
 export default function PortfolioDetail() {
   const { id } = useParams()
-  const [portfolio, setPortfolio] = useState(null)
-  const [positions, setPositions] = useState([])
-  const [prices, setPrices] = useState({})
-  const [loading, setLoading] = useState(true)
   const [showAddPosition, setShowAddPosition] = useState(false)
   const [showAddTrade, setShowAddTrade] = useState(null)
-  const [posForm, setPosForm] = useState({ ticker: '', name: '', type: 'stock', coinId: '' })
-  const [tradeForm, setTradeForm] = useState({ type: 'buy', price: '', quantity: '', date: '', notes: '' })
+  const [showCashModal, setShowCashModal] = useState(false)
   const [suggestions, setSuggestions] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [showCashModal, setShowCashModal] = useState(false)
-  const [cashForm, setCashForm] = useState({ date: new Date().toISOString().split('T')[0], newBalance: '' })
+  const [posForm, setPosForm] = useState({ ticker: '', name: '', type: 'stock', coinId: '' })
+  const [holdingsSorting, setHoldingsSorting] = useState([])
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const [{ data: pData }, { data: posData }] = await Promise.all([
-      supabase.from('portfolios').select('*').eq('id', id).single(),
-      supabase.from('positions').select('*, trades(*)').eq('portfolio_id', id).order('created_at', { ascending: true }),
-    ])
-    setPortfolio(pData)
-    const resolvedPositions = await resolveMissingCoinIds(posData || [], supabase)
-    setPositions(resolvedPositions)
-    await fetchPrices(resolvedPositions)
-    setLoading(false)
-  }, [id])
+  const { data, isLoading, error } = usePortfolioDetailQuery(id)
+  const portfolio = data?.portfolio
+  const positions = data?.positions || []
 
-  async function fetchPrices(positions) {
-    const serverPrices = await getPricesFromServer(positions)
-    setPrices(prev => {
-      const merged = { ...prev }
-      for (const [ticker, price] of Object.entries(serverPrices)) {
-        if (price != null) merged[ticker] = price
-      }
-      return merged
-    })
-  }
+  const { data: prices = {} } = usePricesQuery(positions)
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const addPosition = useAddPositionMutation(id)
+  const deletePosition = useDeletePositionMutation(id)
+  const addTrade = useAddTradeMutation(id)
+  const cashAdjustment = useCashAdjustmentMutation(id)
 
-  useEffect(() => {
-    if (positions.length === 0) return
-    const interval = setInterval(() => fetchPrices(positions), 60000)
-    return () => clearInterval(interval)
-  }, [positions])
+  const { register: registerTrade, handleSubmit: handleSubmitTrade, reset: resetTrade, setValue: setValueTrade, formState: { errors: tradeErrors } } = useForm({
+    resolver: zodResolver(tradeSchema),
+    defaultValues: { type: 'buy', price: '', quantity: '', date: new Date().toISOString().split('T')[0], notes: '' },
+  })
+
+  const { register: registerCash, handleSubmit: handleSubmitCash, reset: resetCash, formState: { errors: cashErrors } } = useForm({
+    resolver: zodResolver(cashSchema),
+    defaultValues: { date: new Date().toISOString().split('T')[0], newBalance: '' },
+  })
 
   function calcPosition(pos) {
     const trades = pos.trades || []
@@ -89,92 +135,101 @@ export default function PortfolioDetail() {
       currentPrice, marketValue,
       unrealizedPnl, unrealizedPnlPercent,
       realizedPnl, realizedPnlPercent,
+      totalBuyQty, totalBuyCost, totalSellProceeds,
     }
   }
 
-  useEffect(() => {
-    const query = posForm.ticker.trim()
-    if (query.length < 1) { setSuggestions([]); return }
+  // Autocomplete for position search
+  async function handleTickerInput(value, type) {
+    setPosForm(f => ({ ...f, ticker: value, name: '' }))
+    setShowSuggestions(true)
+    if (value.length < 1) { setSuggestions([]); return }
     const timeout = setTimeout(async () => {
       setSearchLoading(true)
-      const results = posForm.type === 'crypto'
-        ? await searchCrypto(query)
-        : await searchStocks(query)
+      const results = type === 'crypto' ? await searchCrypto(value) : await searchStocks(value)
       setSuggestions(results)
       setSearchLoading(false)
-      setShowSuggestions(true)
     }, 300)
     return () => clearTimeout(timeout)
-  }, [posForm.ticker, posForm.type])
+  }
 
   function selectSuggestion(item) {
-    setPosForm({
-      ...posForm,
-      ticker: item.ticker,
-      name: item.name,
-      coinId: item.coinId || '',
-    })
+    setPosForm(f => ({ ...f, ticker: item.ticker, name: item.name, coinId: item.coinId || '' }))
     setSuggestions([])
     setShowSuggestions(false)
   }
 
   async function handleAddPosition(e) {
     e.preventDefault()
-    await supabase.from('positions').insert({
-      ticker: posForm.ticker.toUpperCase(),
-      name: posForm.name,
-      type: posForm.type,
-      coin_id: posForm.coinId || null,
-      portfolio_id: id,
-    })
-    setPosForm({ ticker: '', name: '', type: 'stock', coinId: '' })
-    setShowAddPosition(false)
-    fetchData()
+    try {
+      await addPosition.mutateAsync({
+        ticker: posForm.ticker.toUpperCase(),
+        name: posForm.name,
+        type: posForm.type,
+        coin_id: posForm.coinId || null,
+        portfolio_id: id,
+      })
+      setPosForm({ ticker: '', name: '', type: 'stock', coinId: '' })
+      setShowAddPosition(false)
+      toast.success('Позицію додано')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  async function handleAddTrade(e) {
-    e.preventDefault()
-    await supabase.from('trades').insert({
-      position_id: showAddTrade,
-      type: tradeForm.type,
-      price: Number(tradeForm.price),
-      quantity: Number(tradeForm.quantity),
-      date: tradeForm.date || new Date().toISOString().split('T')[0],
-      notes: tradeForm.notes || null,
-    })
-    setTradeForm({ type: 'buy', price: '', quantity: '', date: '', notes: '' })
-    setShowAddTrade(null)
-    fetchData()
+  async function onAddTrade(values) {
+    try {
+      await addTrade.mutateAsync({
+        position_id: showAddTrade,
+        type: values.type,
+        price: values.price,
+        quantity: values.quantity,
+        date: values.date,
+        notes: values.notes || null,
+      })
+      resetTrade()
+      setShowAddTrade(null)
+      toast.success('Угоду додано')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   async function handleDeletePosition(posId) {
     if (!confirm('Видалити позицію та всі її угоди?')) return
-    await supabase.from('trades').delete().eq('position_id', posId)
-    await supabase.from('positions').delete().eq('id', posId)
-    fetchData()
+    try {
+      await deletePosition.mutateAsync(posId)
+      toast.success('Позицію видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  async function handleCashAdjustment(e) {
-    e.preventDefault()
-    const newBalance = Number(cashForm.newBalance)
-    if (isNaN(newBalance) || newBalance < 0) return
-    await supabase.from('adjustments').insert({
-      portfolio_id: id,
-      previous_balance: cashBalance,
-      new_balance: newBalance,
-      date: cashForm.date || new Date().toISOString().split('T')[0],
-    })
-    await supabase
-      .from('portfolios')
-      .update({ cash_balance: newBalance })
-      .eq('id', id)
-    setShowCashModal(false)
-    setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: '' })
-    fetchData()
+  async function onCashAdjustment(values) {
+    try {
+      await cashAdjustment.mutateAsync({
+        previousBalance: cashBalance,
+        newBalance: values.newBalance,
+        date: values.date,
+      })
+      resetCash()
+      setShowCashModal(false)
+      toast.success('Баланс оновлено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
-  if (!portfolio) return <div className="text-red-500">Портфель не знайдено</div>
+  if (isLoading) return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <Link to="/portfolios" className="text-gray-400 hover:text-gray-600">← Назад</Link>
+        <div className="h-7 bg-gray-200 rounded w-48 animate-pulse" />
+      </div>
+      <SkeletonDetail />
+    </div>
+  )
+  if (error || !portfolio) return <div className="text-red-500">Портфель не знайдено</div>
 
   const cashBalance = Number(portfolio?.cash_balance) || 0
   const posCalcs = positions.map(p => ({ pos: p, calc: calcPosition(p) }))
@@ -200,6 +255,115 @@ export default function PortfolioDetail() {
     !worst || item.calc.unrealizedPnlPercent < worst.calc.unrealizedPnlPercent ? item : worst
   , null)
 
+  // Holdings TanStack Table
+  const holdingsColumns = useMemo(() => [
+    {
+      id: 'ticker',
+      accessorFn: row => row.pos.ticker,
+      header: ({ column }) => <SortableHeader column={column}>Назва</SortableHeader>,
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium text-gray-800">{row.original.pos.ticker}</div>
+          <div className="text-xs text-gray-500 truncate max-w-[140px]">{row.original.pos.name || (row.original.pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'qty',
+      accessorFn: row => row.calc.totalQty,
+      header: ({ column }) => <SortableHeader column={column}>Кількість</SortableHeader>,
+      cell: ({ row }) => <span className="text-gray-700">{formatNumber(row.original.calc.totalQty, 4)}</span>,
+    },
+    {
+      id: 'avgPrice',
+      accessorFn: row => row.calc.avgPrice,
+      header: ({ column }) => <SortableHeader column={column}>Сер. ціна</SortableHeader>,
+      cell: ({ row }) => <span className="text-gray-700">{formatMoney(row.original.calc.avgPrice)}</span>,
+    },
+    {
+      id: 'currentPrice',
+      accessorFn: row => row.calc.currentPrice,
+      header: ({ column }) => <SortableHeader column={column}>Ціна</SortableHeader>,
+      cell: ({ row }) => <span className="text-gray-700">{row.original.calc.currentPrice ? formatMoney(row.original.calc.currentPrice) : '---'}</span>,
+    },
+    {
+      id: 'totalCost',
+      accessorFn: row => row.calc.totalCost,
+      header: ({ column }) => <SortableHeader column={column}>Інвестовано</SortableHeader>,
+      cell: ({ row }) => <span className="text-gray-700">{formatMoney(row.original.calc.totalCost)}</span>,
+    },
+    {
+      id: 'marketValue',
+      accessorFn: row => row.calc.marketValue,
+      header: ({ column }) => <SortableHeader column={column}>Ринкова вар.</SortableHeader>,
+      cell: ({ row }) => <span className="font-medium text-gray-800">{formatMoney(row.original.calc.marketValue)}</span>,
+    },
+    {
+      id: 'unrealizedPnl',
+      accessorFn: row => row.calc.unrealizedPnl,
+      header: ({ column }) => <SortableHeader column={column}>Нереаліз. P&L</SortableHeader>,
+      cell: ({ row }) => <span className={`font-medium ${pnlColor(row.original.calc.unrealizedPnl)}`}>{formatMoney(row.original.calc.unrealizedPnl)}</span>,
+    },
+    {
+      id: 'unrealizedPct',
+      accessorFn: row => row.calc.unrealizedPnlPercent,
+      header: ({ column }) => <SortableHeader column={column}>Нереаліз. %</SortableHeader>,
+      cell: ({ row }) => <span className={`font-medium ${pnlColor(row.original.calc.unrealizedPnlPercent)}`}>{formatPercent(row.original.calc.unrealizedPnlPercent)}</span>,
+    },
+    {
+      id: 'realizedPnl',
+      accessorFn: row => row.calc.realizedPnl,
+      header: ({ column }) => <SortableHeader column={column}>Реаліз. P&L</SortableHeader>,
+      cell: ({ row }) => <span className={`font-medium ${pnlColor(row.original.calc.realizedPnl)}`}>{row.original.calc.realizedPnl !== 0 ? formatMoney(row.original.calc.realizedPnl) : '—'}</span>,
+    },
+    {
+      id: 'realizedPct',
+      accessorFn: row => row.calc.realizedPnlPercent,
+      header: ({ column }) => <SortableHeader column={column}>Реаліз. %</SortableHeader>,
+      cell: ({ row }) => <span className={`font-medium ${pnlColor(row.original.calc.realizedPnlPercent)}`}>{row.original.calc.realizedPnl !== 0 ? formatPercent(row.original.calc.realizedPnlPercent) : '—'}</span>,
+    },
+    {
+      id: 'allocation',
+      accessorFn: row => totalInvestmentValue > 0 ? (row.calc.marketValue / totalInvestmentValue) * 100 : 0,
+      header: ({ column }) => <SortableHeader column={column}>Алокація</SortableHeader>,
+      cell: ({ getValue }) => <span className="text-gray-700">{getValue().toFixed(2)}%</span>,
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <div className="flex gap-2 justify-end whitespace-nowrap">
+          <button
+            onClick={() => {
+              setShowAddTrade(row.original.pos.id)
+              setValueTrade('price', prices[row.original.pos.ticker] ? String(prices[row.original.pos.ticker]) : '')
+              setValueTrade('date', new Date().toISOString().split('T')[0])
+            }}
+            className="text-blue-600 hover:text-blue-800 text-xs"
+          >
+            +Угода
+          </button>
+          <button
+            onClick={() => handleDeletePosition(row.original.pos.id)}
+            className="text-red-500 hover:text-red-700 text-xs"
+          >
+            Вид.
+          </button>
+        </div>
+      ),
+      enableSorting: false,
+    },
+  ], [prices, totalInvestmentValue])
+
+  const holdingsTable = useReactTable({
+    data: activePositions,
+    columns: holdingsColumns,
+    state: { sorting: holdingsSorting },
+    onSortingChange: setHoldingsSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
+
   return (
     <div>
       {/* Header */}
@@ -210,9 +374,7 @@ export default function PortfolioDetail() {
 
       {/* Summary Stats + Allocation Row */}
       <div className="flex flex-col lg:flex-row gap-3 mb-6">
-        {/* Stats Cards — 2/3 */}
         <div className="lg:w-2/3 grid grid-cols-2 gap-3">
-          {/* Card 1: Portfolio Value */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Вартість портфеля</div>
             <div className="text-xl font-bold text-gray-800">{formatMoney(totalValue)}</div>
@@ -220,7 +382,7 @@ export default function PortfolioDetail() {
               <span className="text-xs text-gray-400">Готівка: {formatMoney(cashBalance)}</span>
               <button
                 onClick={() => {
-                  setCashForm({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
+                  resetCash({ date: new Date().toISOString().split('T')[0], newBalance: String(cashBalance) })
                   setShowCashModal(true)
                 }}
                 className="text-[10px] text-blue-600 hover:text-blue-800 font-medium border border-blue-200 rounded px-1.5 py-0.5"
@@ -230,7 +392,6 @@ export default function PortfolioDetail() {
             </div>
           </div>
 
-          {/* Card 2: Invested + P&L */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Інвестовано</div>
             <div className="text-xl font-bold text-gray-800">{formatMoney(totalCost)}</div>
@@ -239,7 +400,6 @@ export default function PortfolioDetail() {
             </div>
           </div>
 
-          {/* Card 3: Best Performer */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Найкращий актив</div>
             {bestPerformer ? (
@@ -254,7 +414,6 @@ export default function PortfolioDetail() {
             )}
           </div>
 
-          {/* Card 4: Worst Performer */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Найгірший актив</div>
             {worstPerformer ? (
@@ -270,7 +429,6 @@ export default function PortfolioDetail() {
           </div>
         </div>
 
-        {/* Allocation — 1/3 */}
         {allocationData.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-1/3 shrink-0">
             <div className="text-xs text-gray-500 mb-2">Алокація</div>
@@ -278,17 +436,8 @@ export default function PortfolioDetail() {
               <div className="w-32 h-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={allocationData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={38}
-                      outerRadius={58}
-                      dataKey="value"
-                    >
-                      {allocationData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
+                    <Pie data={allocationData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} dataKey="value">
+                      {allocationData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Tooltip formatter={(v) => formatMoney(v)} />
                   </PieChart>
@@ -301,10 +450,7 @@ export default function PortfolioDetail() {
                     : '0.0'
                   return (
                     <div key={item.name} className="flex items-center gap-2">
-                      <div
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                      />
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                       <span className="text-sm text-gray-700 whitespace-nowrap">{item.name}</span>
                       <span className="text-sm text-gray-400 tabular-nums">{percent}%</span>
                     </div>
@@ -316,7 +462,6 @@ export default function PortfolioDetail() {
         )}
       </div>
 
-      {/* Portfolio History Chart */}
       <PortfolioHistoryChart portfolioId={id} />
 
       {/* Holdings Header */}
@@ -338,7 +483,7 @@ export default function PortfolioDetail() {
               <label className="block text-sm text-gray-600 mb-1">Тип</label>
               <select
                 value={posForm.type}
-                onChange={e => setPosForm({ ...posForm, type: e.target.value })}
+                onChange={e => setPosForm(f => ({ ...f, type: e.target.value }))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="stock">Акція</option>
@@ -352,15 +497,13 @@ export default function PortfolioDetail() {
                 required
                 autoComplete="off"
                 value={posForm.ticker}
-                onChange={e => { setPosForm({ ...posForm, ticker: e.target.value, name: '' }); setShowSuggestions(true) }}
+                onChange={e => handleTickerInput(e.target.value, posForm.type)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={posForm.type === 'crypto' ? 'Введіть назву або тікер (BTC, Ethereum...)' : 'Введіть тікер або назву (AAPL, Tesla...)'}
+                placeholder={posForm.type === 'crypto' ? 'BTC, Ethereum...' : 'AAPL, Tesla...'}
               />
-              {searchLoading && (
-                <div className="absolute right-3 top-8 text-xs text-gray-400">Пошук...</div>
-              )}
+              {searchLoading && <div className="absolute right-3 top-8 text-xs text-gray-400">Пошук...</div>}
               {showSuggestions && suggestions.length > 0 && (
                 <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                   {suggestions.map((item, i) => (
@@ -379,11 +522,9 @@ export default function PortfolioDetail() {
                   ))}
                 </div>
               )}
-              {posForm.name && (
-                <div className="text-xs text-green-600 mt-1">Обрано: {posForm.ticker} — {posForm.name}</div>
-              )}
+              {posForm.name && <div className="text-xs text-green-600 mt-1">Обрано: {posForm.ticker} — {posForm.name}</div>}
             </div>
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+            <button type="submit" disabled={addPosition.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
               Додати
             </button>
             <button type="button" onClick={() => setShowAddPosition(false)} className="text-gray-500 px-3 py-2 text-sm">
@@ -393,7 +534,7 @@ export default function PortfolioDetail() {
         </form>
       )}
 
-      {/* Holdings Table */}
+      {/* Holdings TanStack Table */}
       {activePositions.length === 0 && soldPositions.length === 0 ? (
         <p className="text-gray-500 text-center py-8">Додайте першу позицію</p>
       ) : activePositions.length === 0 ? (
@@ -402,86 +543,41 @@ export default function PortfolioDetail() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm min-w-[1100px]">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left py-3 px-3 font-medium text-gray-600">Назва</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Кількість</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Сер. ціна</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Ціна</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Інвестовано</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Ринкова вар.</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Нереаліз. P&L</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Нереаліз. %</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Реаліз. P&L</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Реаліз. %</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Алокація</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-600">Дії</th>
-              </tr>
+              {holdingsTable.getHeaderGroups().map(hg => (
+                <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                  {hg.headers.map(header => (
+                    <th key={header.id} className="py-3 px-3 text-left">
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
             </thead>
             <tbody>
-              {activePositions.map(({ pos, calc }) => {
-                const allocation = totalInvestmentValue > 0
-                  ? (calc.marketValue / totalInvestmentValue) * 100
-                  : 0
-                return (
-                  <tr key={pos.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-3">
-                      <div className="font-medium text-gray-800">{pos.ticker}</div>
-                      <div className="text-xs text-gray-500 truncate max-w-[140px]">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
+              {holdingsTable.getRowModel().rows.map(row => (
+                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  {row.getVisibleCells().map(cell => (
+                    <td key={cell.id} className={`py-3 px-3 ${cell.column.id !== 'ticker' && cell.column.id !== 'actions' ? 'text-right' : ''}`}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
-                    <td className="text-right py-3 px-3 text-gray-700">{formatNumber(calc.totalQty, 4)}</td>
-                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.avgPrice)}</td>
-                    <td className="text-right py-3 px-3 text-gray-700">
-                      {calc.currentPrice ? formatMoney(calc.currentPrice) : '---'}
-                    </td>
-                    <td className="text-right py-3 px-3 text-gray-700">{formatMoney(calc.totalCost)}</td>
-                    <td className="text-right py-3 px-3 font-medium text-gray-800">{formatMoney(calc.marketValue)}</td>
-                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.unrealizedPnl)}`}>
-                      {formatMoney(calc.unrealizedPnl)}
-                    </td>
-                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.unrealizedPnlPercent)}`}>
-                      {formatPercent(calc.unrealizedPnlPercent)}
-                    </td>
-                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnl)}`}>
-                      {calc.realizedPnl !== 0 ? formatMoney(calc.realizedPnl) : '—'}
-                    </td>
-                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnlPercent)}`}>
-                      {calc.realizedPnl !== 0 ? formatPercent(calc.realizedPnlPercent) : '—'}
-                    </td>
-                    <td className="text-right py-3 px-3 text-gray-700">
-                      {allocation.toFixed(2)}%
-                    </td>
-                    <td className="text-right py-3 px-3 whitespace-nowrap">
-                      <button
-                        onClick={() => { setShowAddTrade(pos.id); setTradeForm({ type: 'buy', price: prices[pos.ticker] ? String(prices[pos.ticker]) : '', quantity: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
-                        className="text-blue-600 hover:text-blue-800 text-xs mr-2"
-                      >
-                        +Угода
-                      </button>
-                      <button
-                        onClick={() => handleDeletePosition(pos.id)}
-                        className="text-red-500 hover:text-red-700 text-xs"
-                      >
-                        Вид.
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+                  ))}
+                </tr>
+              ))}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-300 bg-gray-50 font-medium">
                 <td className="py-3 px-3 text-gray-800">Всього</td>
-                <td className="text-right py-3 px-3"></td>
-                <td className="text-right py-3 px-3"></td>
-                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3" />
+                <td className="text-right py-3 px-3" />
+                <td className="text-right py-3 px-3" />
                 <td className="text-right py-3 px-3 text-gray-800">{formatMoney(totalCost)}</td>
                 <td className="text-right py-3 px-3 text-gray-800">{formatMoney(totalInvestmentValue)}</td>
                 <td className={`text-right py-3 px-3 ${pnlColor(totalUnrealizedPnl)}`}>{formatMoney(totalUnrealizedPnl)}</td>
                 <td className={`text-right py-3 px-3 ${pnlColor(unrealizedPnlPercent)}`}>{formatPercent(unrealizedPnlPercent)}</td>
                 <td className={`text-right py-3 px-3 ${pnlColor(totalRealizedPnl)}`}>{totalRealizedPnl !== 0 ? formatMoney(totalRealizedPnl) : '—'}</td>
-                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3" />
                 <td className="text-right py-3 px-3 text-gray-800">100%</td>
-                <td className="text-right py-3 px-3"></td>
+                <td className="text-right py-3 px-3" />
               </tr>
             </tfoot>
           </table>
@@ -507,59 +603,41 @@ export default function PortfolioDetail() {
                 </tr>
               </thead>
               <tbody>
-                {soldPositions.map(({ pos, calc }) => {
-                  const trades = pos.trades || []
-                  let totalBuyQty = 0, totalBuyCost = 0, totalSellProceeds = 0
-                  trades.forEach(t => {
-                    const qty = Number(t.quantity)
-                    const price = Number(t.price)
-                    if (t.type === 'buy') { totalBuyQty += qty; totalBuyCost += price * qty }
-                    else { totalSellProceeds += price * qty }
-                  })
-                  return (
-                    <tr key={pos.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-3">
-                        <div className="font-medium text-gray-500">{pos.ticker}</div>
-                        <div className="text-xs text-gray-400 truncate max-w-[140px]">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
-                      </td>
-                      <td className="text-right py-3 px-3 text-gray-500">{formatNumber(totalBuyQty, 4)}</td>
-                      <td className="text-right py-3 px-3 text-gray-500">{formatMoney(calc.avgPrice)}</td>
-                      <td className="text-right py-3 px-3 text-gray-500">{formatMoney(totalBuyCost)}</td>
-                      <td className="text-right py-3 px-3 text-gray-500">{formatMoney(totalSellProceeds)}</td>
-                      <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnl)}`}>
-                        {formatMoney(calc.realizedPnl)}
-                      </td>
-                      <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnlPercent)}`}>
-                        {formatPercent(calc.realizedPnlPercent)}
-                      </td>
-                      <td className="text-right py-3 px-3 whitespace-nowrap">
-                        <button
-                          onClick={() => { setShowAddTrade(pos.id); setTradeForm({ type: 'buy', price: '', quantity: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
-                          className="text-blue-600 hover:text-blue-800 text-xs mr-2"
-                        >
-                          +Угода
-                        </button>
-                        <button
-                          onClick={() => handleDeletePosition(pos.id)}
-                          className="text-red-500 hover:text-red-700 text-xs"
-                        >
-                          Вид.
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {soldPositions.map(({ pos, calc }) => (
+                  <tr key={pos.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-3">
+                      <div className="font-medium text-gray-500">{pos.ticker}</div>
+                      <div className="text-xs text-gray-400 truncate max-w-[140px]">{pos.name || (pos.type === 'stock' ? 'Акція' : 'Крипто')}</div>
+                    </td>
+                    <td className="text-right py-3 px-3 text-gray-500">{formatNumber(calc.totalBuyQty, 4)}</td>
+                    <td className="text-right py-3 px-3 text-gray-500">{formatMoney(calc.avgPrice)}</td>
+                    <td className="text-right py-3 px-3 text-gray-500">{formatMoney(calc.totalBuyCost)}</td>
+                    <td className="text-right py-3 px-3 text-gray-500">{formatMoney(calc.totalSellProceeds)}</td>
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnl)}`}>{formatMoney(calc.realizedPnl)}</td>
+                    <td className={`text-right py-3 px-3 font-medium ${pnlColor(calc.realizedPnlPercent)}`}>{formatPercent(calc.realizedPnlPercent)}</td>
+                    <td className="text-right py-3 px-3 whitespace-nowrap">
+                      <button
+                        onClick={() => {
+                          setShowAddTrade(pos.id)
+                          setValueTrade('date', new Date().toISOString().split('T')[0])
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-xs mr-2"
+                      >
+                        +Угода
+                      </button>
+                      <button onClick={() => handleDeletePosition(pos.id)} className="text-red-500 hover:text-red-700 text-xs">
+                        Вид.
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-medium">
                   <td className="py-3 px-3 text-gray-800">Всього продано</td>
-                  <td className="text-right py-3 px-3"></td>
-                  <td className="text-right py-3 px-3"></td>
-                  <td className="text-right py-3 px-3"></td>
-                  <td className="text-right py-3 px-3"></td>
+                  <td colSpan={4} />
                   <td className={`text-right py-3 px-3 ${pnlColor(soldTotalRealizedPnl)}`}>{formatMoney(soldTotalRealizedPnl)}</td>
-                  <td className="text-right py-3 px-3"></td>
-                  <td className="text-right py-3 px-3"></td>
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             </table>
@@ -567,17 +645,16 @@ export default function PortfolioDetail() {
         </div>
       )}
 
-      {/* Trade Modal */}
+      {/* Add Trade Modal */}
       {showAddTrade && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={handleAddTrade} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
+          <form onSubmit={handleSubmitTrade(onAddTrade)} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
             <h3 className="font-semibold text-gray-800 mb-4">Нова угода</h3>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Тип</label>
                 <select
-                  value={tradeForm.type}
-                  onChange={e => setTradeForm({ ...tradeForm, type: e.target.value })}
+                  {...registerTrade('type')}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="buy">Купівля</option>
@@ -588,51 +665,48 @@ export default function PortfolioDetail() {
                 <label className="block text-sm text-gray-600 mb-1">Дата</label>
                 <input
                   type="date"
-                  value={tradeForm.date}
-                  onChange={e => setTradeForm({ ...tradeForm, date: e.target.value })}
+                  {...registerTrade('date')}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {tradeErrors.date && <p className="text-red-500 text-xs mt-1">{tradeErrors.date.message}</p>}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Ціна</label>
                 <input
                   type="number"
                   step="any"
-                  required
-                  value={tradeForm.price}
-                  onChange={e => setTradeForm({ ...tradeForm, price: e.target.value })}
+                  {...registerTrade('price')}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0.00"
                 />
+                {tradeErrors.price && <p className="text-red-500 text-xs mt-1">{tradeErrors.price.message}</p>}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Кількість</label>
                 <input
                   type="number"
                   step="any"
-                  required
-                  value={tradeForm.quantity}
-                  onChange={e => setTradeForm({ ...tradeForm, quantity: e.target.value })}
+                  {...registerTrade('quantity')}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0"
                 />
+                {tradeErrors.quantity && <p className="text-red-500 text-xs mt-1">{tradeErrors.quantity.message}</p>}
               </div>
             </div>
             <div className="mb-4">
               <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
               <input
                 type="text"
-                value={tradeForm.notes}
-                onChange={e => setTradeForm({ ...tradeForm, notes: e.target.value })}
+                {...registerTrade('notes')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Необов'язково"
               />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setShowAddTrade(null)} className="text-gray-500 px-4 py-2 text-sm">
+              <button type="button" onClick={() => { setShowAddTrade(null); resetTrade() }} className="text-gray-500 px-4 py-2 text-sm">
                 Скасувати
               </button>
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+              <button type="submit" disabled={addTrade.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 Додати угоду
               </button>
             </div>
@@ -643,52 +717,39 @@ export default function PortfolioDetail() {
       {/* Cash Adjustment Modal */}
       {showCashModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={handleCashAdjustment} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
+          <form onSubmit={handleSubmitCash(onCashAdjustment)} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
             <h3 className="font-semibold text-gray-800 mb-4">Коригування готівки</h3>
-
             <div className="mb-3">
               <label className="block text-sm text-gray-600 mb-1">Дата</label>
               <input
                 type="date"
-                value={cashForm.date}
-                onChange={e => setCashForm({ ...cashForm, date: e.target.value })}
+                {...registerCash('date')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {cashErrors.date && <p className="text-red-500 text-xs mt-1">{cashErrors.date.message}</p>}
             </div>
-
             <div className="mb-3">
               <label className="block text-sm text-gray-600 mb-1">Поточний баланс</label>
               <div className="text-lg font-semibold text-gray-800 bg-gray-50 rounded-lg px-3 py-2">
-                {formatMoney(Number(portfolio?.cash_balance) || 0)}
+                {formatMoney(cashBalance)}
               </div>
             </div>
-
             <div className="mb-4">
               <label className="block text-sm text-gray-600 mb-1">Новий баланс</label>
               <input
                 type="number"
                 step="any"
-                required
-                min="0"
-                value={cashForm.newBalance}
-                onChange={e => setCashForm({ ...cashForm, newBalance: e.target.value })}
+                {...registerCash('newBalance')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0.00"
               />
+              {cashErrors.newBalance && <p className="text-red-500 text-xs mt-1">{cashErrors.newBalance.message}</p>}
             </div>
-
             <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowCashModal(false)}
-                className="text-gray-500 px-4 py-2 text-sm"
-              >
+              <button type="button" onClick={() => setShowCashModal(false)} className="text-gray-500 px-4 py-2 text-sm">
                 Скасувати
               </button>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-              >
+              <button type="submit" disabled={cashAdjustment.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 Зберегти
               </button>
             </div>

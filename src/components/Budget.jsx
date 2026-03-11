@@ -1,10 +1,22 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
 import { formatMoney } from '../lib/formatters'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import {
+  useBudgetQuery,
+  useCashflowQuery,
+  useCreateBudgetItemMutation,
+  useUpdateBudgetItemMutation,
+  useDeleteBudgetItemMutation,
+  useCreateCashflowMutation,
+  useUpdateCashflowMutation,
+  useDeleteCashflowMutation,
+} from '../hooks/useBudgetQuery'
 
 const CURRENCY_ICONS = { UAH: '🇺🇦', USD: '🇺🇸', EUR: '🇪🇺' }
-
 const MONTHS_UK = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
                    'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень']
 
@@ -25,54 +37,75 @@ function buildYearRows(cashflow, year) {
   })
 }
 
+const budgetSchema = z.object({
+  label: z.string().min(1, "Назва обов'язкова"),
+  currency: z.enum(['UAH', 'USD', 'EUR']),
+  amount: z.coerce.number().min(0, 'Сума має бути >= 0'),
+})
+
+const cashflowSchema = z.object({
+  month: z.string().min(1, 'Місяць обов\'язковий'),
+  currency: z.enum(['UAH', 'USD', 'EUR']),
+  income: z.coerce.number().min(0),
+  expenses: z.coerce.number().min(0),
+  investments: z.coerce.number().min(0),
+})
+
 export default function Budget() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ label: '', currency: 'UAH', amount: '' })
-  const [error, setError] = useState(null)
-
-  const [cashflow, setCashflow] = useState([])
   const [showCashflowForm, setShowCashflowForm] = useState(false)
   const [editingCashflowId, setEditingCashflowId] = useState(null)
-  const [cfForm, setCfForm] = useState({ month: currentMonth(), income: '', expenses: '', investments: '', currency: 'UAH' })
   const [viewMode, setViewMode] = useState('chart')
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [activeSeries, setActiveSeries] = useState(null)
 
-  useEffect(() => { fetchBudget(); fetchCashflow() }, [])
+  const { data: items = [], isLoading: budgetLoading } = useBudgetQuery()
+  const { data: cashflow = [], isLoading: cashflowLoading } = useCashflowQuery()
 
-  async function fetchBudget() {
-    setLoading(true)
-    const { data, error: fetchError } = await supabase.from('budget').select('*').order('updated_at', { ascending: true })
-    if (fetchError) { setError(fetchError.message); setLoading(false); return }
-    setItems(data || [])
-    setLoading(false)
-  }
+  const createBudget = useCreateBudgetItemMutation()
+  const updateBudget = useUpdateBudgetItemMutation()
+  const deleteBudget = useDeleteBudgetItemMutation()
+  const createCashflow = useCreateCashflowMutation()
+  const updateCashflow = useUpdateCashflowMutation()
+  const deleteCashflow = useDeleteCashflowMutation()
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError(null)
-    const payload = { label: form.label, currency: form.currency, amount: Number(form.amount), updated_at: new Date().toISOString() }
-    let result
-    if (editingId) {
-      result = await supabase.from('budget').update(payload).eq('id', editingId)
-    } else {
-      result = await supabase.from('budget').insert(payload)
+  const { register: rBudget, handleSubmit: hsBudget, reset: rsBudget, formState: { errors: eBudget } } = useForm({
+    resolver: zodResolver(budgetSchema),
+    defaultValues: { label: '', currency: 'UAH', amount: '' },
+  })
+
+  const { register: rCashflow, handleSubmit: hsCashflow, reset: rsCashflow, formState: { errors: eCashflow } } = useForm({
+    resolver: zodResolver(cashflowSchema),
+    defaultValues: { month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' },
+  })
+
+  async function onBudgetSubmit(values) {
+    try {
+      const payload = { ...values, updated_at: new Date().toISOString() }
+      if (editingId) {
+        await updateBudget.mutateAsync({ id: editingId, data: payload })
+        toast.success('Рахунок оновлено')
+      } else {
+        await createBudget.mutateAsync(payload)
+        toast.success('Рахунок додано')
+      }
+      rsBudget({ label: '', currency: 'UAH', amount: '' })
+      setShowForm(false)
+      setEditingId(null)
+    } catch (err) {
+      toast.error(err.message)
     }
-    if (result.error) {
-      setError(result.error.message)
-      return
-    }
-    resetForm()
-    fetchBudget()
   }
 
   async function handleDelete(id) {
     if (!confirm('Видалити цей рахунок?')) return
-    await supabase.from('budget').delete().eq('id', id)
-    fetchBudget()
+    try {
+      await deleteBudget.mutateAsync(id)
+      toast.success('Рахунок видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   async function handleUpdateAmount(item) {
@@ -80,55 +113,52 @@ export default function Budget() {
     if (newAmount === null) return
     const num = Number(newAmount)
     if (isNaN(num)) return
-    await supabase.from('budget').update({ amount: num, updated_at: new Date().toISOString() }).eq('id', item.id)
-    fetchBudget()
+    try {
+      await updateBudget.mutateAsync({ id: item.id, data: { amount: num, updated_at: new Date().toISOString() } })
+      toast.success('Суму оновлено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  function startEdit(item) {
+  function startEditBudget(item) {
     setEditingId(item.id)
-    setForm({ label: item.label, currency: item.currency, amount: String(item.amount) })
+    rsBudget({ label: item.label, currency: item.currency, amount: String(item.amount) })
     setShowForm(true)
   }
 
-  function resetForm() {
-    setForm({ label: '', currency: 'UAH', amount: '' })
-    setShowForm(false)
-    setEditingId(null)
-  }
-
-  async function fetchCashflow() {
-    const { data } = await supabase.from('monthly_cashflow').select('*').order('month', { ascending: false })
-    setCashflow(data || [])
-  }
-
-  async function handleCashflowSubmit(e) {
-    e.preventDefault()
-    const payload = { month: cfForm.month, income: Number(cfForm.income), expenses: Number(cfForm.expenses), investments: Number(cfForm.investments), currency: cfForm.currency, updated_at: new Date().toISOString() }
-    if (editingCashflowId) {
-      await supabase.from('monthly_cashflow').update(payload).eq('id', editingCashflowId)
-    } else {
-      await supabase.from('monthly_cashflow').insert(payload)
+  async function onCashflowSubmit(values) {
+    try {
+      const payload = { ...values, updated_at: new Date().toISOString() }
+      if (editingCashflowId) {
+        await updateCashflow.mutateAsync({ id: editingCashflowId, data: payload })
+        toast.success('Місяць оновлено')
+      } else {
+        await createCashflow.mutateAsync(payload)
+        toast.success('Місяць додано')
+      }
+      rsCashflow({ month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' })
+      setShowCashflowForm(false)
+      setEditingCashflowId(null)
+    } catch (err) {
+      toast.error(err.message)
     }
-    resetCashflowForm()
-    fetchCashflow()
   }
 
   async function handleCashflowDelete(id) {
     if (!confirm('Видалити цей запис?')) return
-    await supabase.from('monthly_cashflow').delete().eq('id', id)
-    fetchCashflow()
+    try {
+      await deleteCashflow.mutateAsync(id)
+      toast.success('Запис видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   function startEditCashflow(entry) {
     setEditingCashflowId(entry.id)
-    setCfForm({ month: entry.month, income: String(entry.income), expenses: String(entry.expenses), investments: String(entry.investments), currency: entry.currency })
+    rsCashflow({ month: entry.month, income: String(entry.income), expenses: String(entry.expenses), investments: String(entry.investments), currency: entry.currency })
     setShowCashflowForm(true)
-  }
-
-  function resetCashflowForm() {
-    setCfForm({ month: currentMonth(), income: '', expenses: '', investments: '', currency: 'UAH' })
-    setShowCashflowForm(false)
-    setEditingCashflowId(null)
   }
 
   const grouped = { UAH: [], USD: [], EUR: [] }
@@ -144,26 +174,19 @@ export default function Budget() {
 
   const totalUsd = (totals.USD || 0) + (totals.EUR || 0) * 1.08 + (totals.UAH || 0) / 41.5
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
+  if (budgetLoading) return <div className="text-gray-500 animate-pulse">Завантаження...</div>
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Бюджет</h2>
         <button
-          onClick={() => { setShowForm(true); setEditingId(null); setForm({ label: '', currency: 'UAH', amount: '' }) }}
+          onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '' }) }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
         >
           + Додати рахунок
         </button>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 mb-4 flex items-center justify-between">
-          <span>❌ {error}</span>
-          <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800 text-sm">✕</button>
-        </div>
-      )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <div className="text-sm text-gray-500 mb-1">Загальний бюджет (в USD)</div>
@@ -176,25 +199,22 @@ export default function Budget() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <form onSubmit={hsBudget(onBudgetSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <h3 className="font-semibold text-gray-700 mb-3">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
-          <div className="flex gap-3 items-end">
+          <div className="flex gap-3 items-start">
             <div className="flex-1">
               <label className="block text-sm text-gray-600 mb-1">Назва</label>
               <input
-                type="text"
-                required
-                value={form.label}
-                onChange={e => setForm({ ...form, label: e.target.value })}
+                {...rBudget('label')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Монобанк"
               />
+              {eBudget.label && <p className="text-red-500 text-xs mt-1">{eBudget.label.message}</p>}
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Валюта</label>
               <select
-                value={form.currency}
-                onChange={e => setForm({ ...form, currency: e.target.value })}
+                {...rBudget('currency')}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="UAH">UAH</option>
@@ -207,17 +227,18 @@ export default function Budget() {
               <input
                 type="number"
                 step="any"
-                required
-                value={form.amount}
-                onChange={e => setForm({ ...form, amount: e.target.value })}
+                {...rBudget('amount')}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0.00"
               />
+              {eBudget.amount && <p className="text-red-500 text-xs mt-1">{eBudget.amount.message}</p>}
             </div>
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              {editingId ? 'Зберегти' : 'Додати'}
-            </button>
-            <button type="button" onClick={resetForm} className="text-gray-500 px-3 py-2 text-sm">Скасувати</button>
+            <div className="flex gap-2 pt-6">
+              <button type="submit" disabled={createBudget.isPending || updateBudget.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                {editingId ? 'Зберегти' : 'Додати'}
+              </button>
+              <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-500 px-3 py-2 text-sm">Скасувати</button>
+            </div>
           </div>
         </form>
       )}
@@ -235,12 +256,15 @@ export default function Budget() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="font-medium text-gray-800">{item.label}</div>
-                      <div className="text-xl font-bold text-gray-800 mt-1 cursor-pointer hover:text-blue-600" onClick={() => handleUpdateAmount(item)}>
+                      <div
+                        className="text-xl font-bold text-gray-800 mt-1 cursor-pointer hover:text-blue-600"
+                        onClick={() => handleUpdateAmount(item)}
+                      >
                         {formatMoney(item.amount, item.currency)}
                       </div>
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-blue-600 text-xs px-1">Ред.</button>
+                      <button onClick={() => startEditBudget(item)} className="text-gray-400 hover:text-blue-600 text-xs px-1">Ред.</button>
                       <button onClick={() => handleDelete(item.id)} className="text-gray-400 hover:text-red-600 text-xs px-1">Вид.</button>
                     </div>
                   </div>
@@ -260,11 +284,10 @@ export default function Budget() {
 
       <hr className="border-gray-200 my-8" />
 
-      {/* Cashflow section header */}
+      {/* Cashflow section */}
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-bold text-gray-800">Статистика балансу</h2>
         <div className="flex items-center gap-3">
-          {/* View toggle */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('chart')}
@@ -291,7 +314,7 @@ export default function Budget() {
             </button>
           </div>
           <button
-            onClick={() => { setShowCashflowForm(true); setEditingCashflowId(null); setCfForm({ month: currentMonth(), income: '', expenses: '', investments: '', currency: 'UAH' }) }}
+            onClick={() => { setShowCashflowForm(true); setEditingCashflowId(null); rsCashflow({ month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' }) }}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
           >
             + Додати місяць
@@ -307,26 +330,17 @@ export default function Budget() {
       </div>
 
       {showCashflowForm && (
-        <form onSubmit={handleCashflowSubmit} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <form onSubmit={hsCashflow(onCashflowSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <h3 className="font-semibold text-gray-700 mb-3">{editingCashflowId ? 'Редагувати місяць' : 'Новий запис'}</h3>
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-wrap gap-3 items-start">
             <div>
               <label className="block text-sm text-gray-600 mb-1">Місяць</label>
-              <input
-                type="month"
-                required
-                value={cfForm.month}
-                onChange={e => setCfForm({ ...cfForm, month: e.target.value })}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="month" {...rCashflow('month')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {eCashflow.month && <p className="text-red-500 text-xs mt-1">{eCashflow.month.message}</p>}
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Валюта</label>
-              <select
-                value={cfForm.currency}
-                onChange={e => setCfForm({ ...cfForm, currency: e.target.value })}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <select {...rCashflow('currency')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="UAH">UAH</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
@@ -334,44 +348,22 @@ export default function Budget() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Доходи</label>
-              <input
-                type="number"
-                step="any"
-                required
-                value={cfForm.income}
-                onChange={e => setCfForm({ ...cfForm, income: e.target.value })}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00"
-              />
+              <input type="number" step="any" {...rCashflow('income')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Витрати</label>
-              <input
-                type="number"
-                step="any"
-                required
-                value={cfForm.expenses}
-                onChange={e => setCfForm({ ...cfForm, expenses: e.target.value })}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00"
-              />
+              <input type="number" step="any" {...rCashflow('expenses')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Інвестиції</label>
-              <input
-                type="number"
-                step="any"
-                required
-                value={cfForm.investments}
-                onChange={e => setCfForm({ ...cfForm, investments: e.target.value })}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00"
-              />
+              <input type="number" step="any" {...rCashflow('investments')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
             </div>
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              {editingCashflowId ? 'Зберегти' : 'Додати'}
-            </button>
-            <button type="button" onClick={resetCashflowForm} className="text-gray-500 px-3 py-2 text-sm">Скасувати</button>
+            <div className="flex gap-2 pt-6">
+              <button type="submit" disabled={createCashflow.isPending || updateCashflow.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                {editingCashflowId ? 'Зберегти' : 'Додати'}
+              </button>
+              <button type="button" onClick={() => { setShowCashflowForm(false); setEditingCashflowId(null) }} className="text-gray-500 px-3 py-2 text-sm">Скасувати</button>
+            </div>
           </div>
         </form>
       )}
@@ -397,7 +389,6 @@ export default function Budget() {
         if (viewMode === 'chart') {
           return (
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              {/* Summary pills */}
               {(() => {
                 const pills = [
                   { key: 'Доходи',    bg: 'bg-emerald-50', ring: 'ring-[#10B981]', dot: 'bg-[#10B981]', value: totalIncome },
@@ -441,7 +432,6 @@ export default function Budget() {
           )
         }
 
-        // Table view
         return (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -488,9 +478,7 @@ export default function Budget() {
                     </tr>
                   )
                 })}
-                {/* Dashed separator */}
                 <tr><td colSpan={6} className="px-0 py-0"><div className="border-t-2 border-dashed border-gray-300 mx-4"></div></td></tr>
-                {/* Average row */}
                 <tr className="font-semibold bg-gray-50">
                   <td className="px-4 py-3 text-gray-700">Середнє</td>
                   <td className="px-4 py-3 text-right text-[#10B981]">{dataRows.length ? formatMoney(avgIncome, activeCurrency) : '—'}</td>
@@ -501,7 +489,6 @@ export default function Budget() {
                   <td className="px-4 py-3 text-right text-[#8B5CF6]">{dataRows.length ? formatMoney(avgInvestments, activeCurrency) : '—'}</td>
                   <td></td>
                 </tr>
-                {/* Total row */}
                 <tr className="font-semibold bg-gray-50 border-t border-gray-200">
                   <td className="px-4 py-3 text-gray-700">Всього</td>
                   <td className="px-4 py-3 text-right text-[#10B981]">{dataRows.length ? formatMoney(totalIncome, activeCurrency) : '—'}</td>

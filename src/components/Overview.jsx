@@ -1,53 +1,31 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
-import { supabase } from '../lib/supabase'
-import { getPricesFromServer, getCoinId, resolveMissingCoinIds } from '../lib/priceService'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
+import { usePortfoliosWithPositionsQuery } from '../hooks/usePortfoliosQuery'
+import { useBudgetQuery } from '../hooks/useBudgetQuery'
+import { usePricesQuery } from '../hooks/usePricesQuery'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
+function StatCardSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
+      <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
+      <div className="h-6 bg-gray-200 rounded w-3/4 mb-2" />
+      <div className="h-3 bg-gray-100 rounded w-1/3" />
+    </div>
+  )
+}
+
 export default function Overview() {
-  const [portfolios, setPortfolios] = useState([])
-  const [budget, setBudget] = useState([])
-  const [prices, setPrices] = useState({})
-  const [loading, setLoading] = useState(true)
+  const { data: portfolios = [], isLoading: portfoliosLoading } = usePortfoliosWithPositionsQuery()
+  const { data: budget = [], isLoading: budgetLoading } = useBudgetQuery()
 
-  useEffect(() => { fetchAll() }, [])
+  const allPositions = portfolios.flatMap(p => p.positions || [])
+  const { data: prices = {}, isLoading: pricesLoading } = usePricesQuery(allPositions)
 
-  async function fetchAll() {
-    setLoading(true)
-    const [{ data: pData }, { data: bData }] = await Promise.all([
-      supabase.from('portfolios').select('*, positions(*, trades(*))').order('created_at', { ascending: true }),
-      supabase.from('budget').select('*'),
-    ])
-    setBudget(bData || [])
-
-    const allPositions = (pData || []).flatMap(p => p.positions || [])
-    const resolvedPositions = await resolveMissingCoinIds(allPositions, supabase)
-
-    // Rebuild portfolios with resolved positions
-    const resolvedPortfolios = (pData || []).map(p => ({
-      ...p,
-      positions: (p.positions || []).map(pos => {
-        const resolved = resolvedPositions.find(rp => rp.id === pos.id)
-        return resolved || pos
-      })
-    }))
-    setPortfolios(resolvedPortfolios)
-
-    const serverPrices = await getPricesFromServer(resolvedPositions)
-
-    setPrices(prev => {
-      const merged = { ...prev }
-      for (const [ticker, price] of Object.entries(serverPrices)) {
-        if (price != null) merged[ticker] = price
-      }
-      return merged
-    })
-    setLoading(false)
-  }
+  const loading = portfoliosLoading || budgetLoading
 
   function calcPositionValue(pos) {
     const trades = pos.trades || []
@@ -61,10 +39,7 @@ export default function Overview() {
   }
 
   function calcPortfolioValue(p) {
-    return (p.positions || []).reduce((sum, pos) => {
-      const { value } = calcPositionValue(pos)
-      return sum + value
-    }, 0)
+    return (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).value, 0)
   }
 
   function calcPortfolioPnl(p) {
@@ -86,7 +61,6 @@ export default function Overview() {
   const totalPnl = portfolios.reduce((sum, p) => sum + calcPortfolioPnl(p), 0)
   const totalPnlPercent = investmentCost > 0 ? (totalPnl / investmentCost) * 100 : 0
 
-  // Best/worst portfolio by P&L percent
   const portfolioPnls = portfolios.map(p => {
     const value = calcPortfolioValue(p)
     const cost = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).cost, 0)
@@ -102,7 +76,7 @@ export default function Overview() {
   , null)
 
   const pieData = [
-    ...portfolios.map((p, i) => ({ name: p.name, value: Math.max(0, calcPortfolioValue(p)) })),
+    ...portfolios.map((p) => ({ name: p.name, value: Math.max(0, calcPortfolioValue(p)) })),
     ...(budgetTotal > 0 ? [{ name: 'Бюджет', value: budgetTotal }] : []),
   ].filter(d => d.value > 0).sort((a, b) => b.value - a.value)
 
@@ -111,7 +85,16 @@ export default function Overview() {
     pnl: calcPortfolioPnl(p),
   }))
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
+  if (loading) {
+    return (
+      <div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">Огляд</h2>
+        <div className="grid grid-cols-2 gap-3 mb-6 lg:w-2/3">
+          {[1, 2, 3, 4].map(i => <StatCardSkeleton key={i} />)}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>

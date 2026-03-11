@@ -1,6 +1,16 @@
-import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState, useMemo } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+} from '@tanstack/react-table'
 import { formatMoney, formatDate } from '../lib/formatters'
+import { useDividendsQuery, useCreateDividendMutation, useDeleteDividendMutation } from '../hooks/useDividendsQuery'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -13,43 +23,54 @@ const MONTHS_FULL = [
   'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень',
 ]
 
+const schema = z.object({
+  ticker: z.string().min(1, "Тікер обов'язковий"),
+  amount: z.coerce.number().positive('Сума має бути > 0'),
+  date: z.string().optional(),
+  notes: z.string().optional(),
+})
+
 export default function Dividends() {
-  const [dividends, setDividends] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ ticker: '', amount: '', date: '', notes: '' })
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [sorting, setSorting] = useState([{ id: 'date', desc: true }])
 
-  useEffect(() => { fetchDividends() }, [])
+  const { data: dividends = [], isLoading } = useDividendsQuery()
+  const createDividend = useCreateDividendMutation()
+  const deleteDividend = useDeleteDividendMutation()
 
-  async function fetchDividends() {
-    setLoading(true)
-    const { data } = await supabase.from('dividends').select('*').order('date', { ascending: false })
-    setDividends(data || [])
-    setLoading(false)
-  }
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { ticker: '', amount: '', date: '', notes: '' },
+  })
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    await supabase.from('dividends').insert({
-      ticker: form.ticker.toUpperCase(),
-      amount: Number(form.amount),
-      date: form.date || new Date().toISOString().split('T')[0],
-      notes: form.notes || null,
-    })
-    setForm({ ticker: '', amount: '', date: '', notes: '' })
-    setShowForm(false)
-    fetchDividends()
+  async function onSubmit(values) {
+    try {
+      await createDividend.mutateAsync({
+        ticker: values.ticker.toUpperCase(),
+        amount: values.amount,
+        date: values.date || new Date().toISOString().split('T')[0],
+        notes: values.notes || null,
+      })
+      reset()
+      setShowForm(false)
+      toast.success('Дохід додано')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   async function handleDelete(id) {
     if (!confirm('Видалити цей запис?')) return
-    await supabase.from('dividends').delete().eq('id', id)
-    fetchDividends()
+    try {
+      await deleteDividend.mutateAsync(id)
+      toast.success('Запис видалено')
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  // ── Computed data ──
-
+  // Computed data
   const total = dividends.reduce((sum, d) => sum + Number(d.amount), 0)
 
   const availableYears = useMemo(() => {
@@ -95,9 +116,63 @@ export default function Dividends() {
       .sort((a, b) => b.amount - a.amount)
   }, [yearDividends, yearTotal])
 
-  const uniqueTickersCount = tickerData.length
+  // TanStack Table
+  const columns = useMemo(() => [
+    {
+      id: 'date',
+      accessorFn: row => row.date,
+      header: ({ column }) => (
+        <button className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Дата <span className="text-[10px] text-gray-400">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+        </button>
+      ),
+      cell: ({ getValue }) => <span className="text-gray-700">{formatDate(getValue())}</span>,
+    },
+    {
+      id: 'ticker',
+      accessorFn: row => row.ticker,
+      header: ({ column }) => (
+        <button className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Тікер <span className="text-[10px] text-gray-400">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+        </button>
+      ),
+      cell: ({ getValue }) => <span className="font-medium text-gray-800">{getValue()}</span>,
+    },
+    {
+      id: 'amount',
+      accessorFn: row => Number(row.amount),
+      header: ({ column }) => (
+        <button className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900 ml-auto" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Сума <span className="text-[10px] text-gray-400">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+        </button>
+      ),
+      cell: ({ getValue }) => <span className="font-medium text-green-600">{formatMoney(getValue())}</span>,
+    },
+    {
+      id: 'notes',
+      accessorFn: row => row.notes || '',
+      header: 'Нотатки',
+      cell: ({ getValue }) => <span className="text-gray-500">{getValue() || '—'}</span>,
+      enableSorting: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <button onClick={() => handleDelete(row.original.id)} className="text-red-500 hover:text-red-700 text-xs">Вид.</button>
+      ),
+      enableSorting: false,
+    },
+  ], [])
 
-  if (loading) return <div className="text-gray-500">Завантаження...</div>
+  const table = useReactTable({
+    data: dividends,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
 
   return (
     <div>
@@ -132,36 +207,46 @@ export default function Dividends() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Всього (весь час)</div>
-          <div className="text-xl font-bold text-green-600">{formatMoney(total)}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{dividends.length} записів</div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 animate-pulse">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
+              <div className="h-6 bg-gray-200 rounded w-3/4" />
+            </div>
+          ))}
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">За {selectedYear}</div>
-          <div className="text-xl font-bold text-green-600">{formatMoney(yearTotal)}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{yearDividends.length} записів</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Середнє / міс</div>
-          <div className="text-xl font-bold text-gray-800">{formatMoney(avgPerMonth)}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{monthsWithData} міс. з виплатами</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Тікерів</div>
-          <div className="text-xl font-bold text-gray-800">{uniqueTickersCount}</div>
-          <div className="text-xs text-gray-400 mt-0.5 truncate">
-            {tickerData.slice(0, 4).map(t => t.ticker).join(', ')}
-            {tickerData.length > 4 ? '...' : ''}
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-sm text-gray-500">Всього (весь час)</div>
+            <div className="text-xl font-bold text-green-600">{formatMoney(total)}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{dividends.length} записів</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-sm text-gray-500">За {selectedYear}</div>
+            <div className="text-xl font-bold text-green-600">{formatMoney(yearTotal)}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{yearDividends.length} записів</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-sm text-gray-500">Середнє / міс</div>
+            <div className="text-xl font-bold text-gray-800">{formatMoney(avgPerMonth)}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{monthsWithData} міс. з виплатами</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-sm text-gray-500">Тікерів</div>
+            <div className="text-xl font-bold text-gray-800">{tickerData.length}</div>
+            <div className="text-xs text-gray-400 mt-0.5 truncate">
+              {tickerData.slice(0, 4).map(t => t.ticker).join(', ')}
+              {tickerData.length > 4 ? '...' : ''}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Charts row */}
       {yearDividends.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Monthly BarChart */}
           <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Помісячні дивіденди — {selectedYear}</h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -188,7 +273,6 @@ export default function Dividends() {
             </ResponsiveContainer>
           </div>
 
-          {/* Ticker breakdown */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">По тікерах — {selectedYear}</h3>
             {tickerData.length > 0 ? (
@@ -223,38 +307,34 @@ export default function Dividends() {
 
       {/* Add form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <h3 className="font-semibold text-gray-700 mb-3">Новий дохід</h3>
-          <div className="flex gap-3 items-end flex-wrap">
+          <div className="flex gap-3 items-start flex-wrap">
             <div>
               <label className="block text-sm text-gray-600 mb-1">Тікер</label>
               <input
-                type="text"
-                required
-                value={form.ticker}
-                onChange={e => setForm({ ...form, ticker: e.target.value })}
+                {...register('ticker')}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="AAPL"
               />
+              {errors.ticker && <p className="text-red-500 text-xs mt-1">{errors.ticker.message}</p>}
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Сума (USD)</label>
               <input
                 type="number"
                 step="any"
-                required
-                value={form.amount}
-                onChange={e => setForm({ ...form, amount: e.target.value })}
+                {...register('amount')}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0.00"
               />
+              {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount.message}</p>}
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Дата</label>
               <input
                 type="date"
-                value={form.date}
-                onChange={e => setForm({ ...form, date: e.target.value })}
+                {...register('date')}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -262,24 +342,34 @@ export default function Dividends() {
               <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
               <input
                 type="text"
-                value={form.notes}
-                onChange={e => setForm({ ...form, notes: e.target.value })}
+                {...register('notes')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Необов'язково"
               />
             </div>
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              Додати
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} className="text-gray-500 px-3 py-2 text-sm">
-              Скасувати
-            </button>
+            <div className="flex gap-2 pt-6">
+              <button type="submit" disabled={createDividend.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                Додати
+              </button>
+              <button type="button" onClick={() => { setShowForm(false); reset() }} className="text-gray-500 px-3 py-2 text-sm">
+                Скасувати
+              </button>
+            </div>
           </div>
         </form>
       )}
 
       {/* Table */}
-      {dividends.length === 0 ? (
+      {isLoading ? (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden animate-pulse">
+          <div className="h-10 bg-gray-100 border-b border-gray-200" />
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex gap-4 px-4 py-3 border-b border-gray-100">
+              {[1, 2, 3, 4, 5].map(j => <div key={j} className="h-4 bg-gray-100 rounded flex-1" />)}
+            </div>
+          ))}
+        </div>
+      ) : dividends.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <p className="text-lg mb-2">Немає записів</p>
           <p className="text-sm">Додайте перший дохід від дивідендів</p>
@@ -288,26 +378,24 @@ export default function Dividends() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Дата</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Тікер</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Сума</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Нотатки</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Дії</th>
-              </tr>
+              {table.getHeaderGroups().map(hg => (
+                <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                  {hg.headers.map(header => (
+                    <th key={header.id} className={`py-3 px-4 ${header.id === 'amount' || header.id === 'actions' ? 'text-right' : 'text-left'}`}>
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
             </thead>
             <tbody>
-              {dividends.map(d => (
-                <tr key={d.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-gray-700">{formatDate(d.date)}</td>
-                  <td className="py-3 px-4 font-medium text-gray-800">{d.ticker}</td>
-                  <td className="text-right py-3 px-4 font-medium text-green-600">{formatMoney(d.amount)}</td>
-                  <td className="py-3 px-4 text-gray-500">{d.notes || '—'}</td>
-                  <td className="text-right py-3 px-4">
-                    <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-700 text-xs">
-                      Вид.
-                    </button>
-                  </td>
+              {table.getRowModel().rows.map(row => (
+                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  {row.getVisibleCells().map(cell => (
+                    <td key={cell.id} className={`py-3 px-4 ${cell.column.id === 'amount' || cell.column.id === 'actions' ? 'text-right' : ''}`}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
