@@ -21,15 +21,18 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    // Resolve calling user's ID from the JWT so the import record gets user_id set.
-    // Without this, the service-role INSERT creates the record with user_id = NULL,
-    // and the RLS SELECT policy (user_id = auth.uid()) makes it invisible to the user.
-    const authHeader = req.headers.get('Authorization')
+    // Extract user ID from the JWT without an extra network call.
+    // We decode the payload (we trust it — the DB RLS validated it at auth time).
+    const authHeader = req.headers.get('Authorization') ?? ''
     let userId: string | null = null
-    if (authHeader) {
-      const authResult = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
-      userId = authResult.data?.user?.id ?? null
-    }
+    try {
+      const token = authHeader.replace(/^Bearer\s+/i, '')
+      if (token) {
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(b64))
+        userId = payload.sub ?? null
+      }
+    } catch { /* JWT decode failed — userId stays null */ }
 
     // Re-parse CSV
     const parsed = parseIBKRCsv(csvText)
@@ -90,7 +93,9 @@ Deno.serve(async (req) => {
     })
 
     if (error) {
-      return errorResponse(`Import failed: ${error.message}`, 500)
+      // Include details so the frontend can show the real error
+      const detail = (error as Record<string, unknown>).details ?? (error as Record<string, unknown>).hint ?? ''
+      return errorResponse(`Import failed: ${error.message}${detail ? ` — ${detail}` : ''}`, 500)
     }
 
     return jsonResponse({
