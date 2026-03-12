@@ -79,15 +79,13 @@ export default function Dividends() {
     return [...years].sort((a, b) => b - a)
   }, [dividends])
 
-  // Auto-select the most recent year with data when dividends first load
+  // Auto-select the most recent year with data if the current selectedYear has no dividends
   useEffect(() => {
-    if (dividends.length === 0) return
-    const yearsWithData = [...new Set(dividends.map(d => new Date(d.date).getFullYear()))]
-    const mostRecent = Math.max(...yearsWithData)
-    if (!yearsWithData.includes(selectedYear)) {
-      setSelectedYear(mostRecent)
+    if (availableYears.length === 0) return
+    if (!availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[0]) // availableYears is sorted desc → [0] is most recent
     }
-  }, [dividends.length])
+  }, [availableYears])
 
   const yearDividends = useMemo(
     () => dividends.filter(d => new Date(d.date).getFullYear() === selectedYear),
@@ -176,7 +174,7 @@ export default function Dividends() {
   ], [])
 
   const table = useReactTable({
-    data: dividends,
+    data: yearDividends,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -379,10 +377,10 @@ export default function Dividends() {
             </div>
           ))}
         </div>
-      ) : dividends.length === 0 ? (
+      ) : yearDividends.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          <p className="text-lg mb-2">Немає записів</p>
-          <p className="text-sm">Додайте перший дохід від дивідендів</p>
+          <p className="text-lg mb-2">Немає записів за {selectedYear} рік</p>
+          <p className="text-sm">Скористайтесь стрілками для перегляду інших років</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
