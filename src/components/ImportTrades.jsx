@@ -86,7 +86,17 @@ export default function ImportTrades() {
       const { data, error } = await supabase.functions.invoke('import-ibkr-commit', {
         body: { portfolioId: selectedPortfolio.id, csvText, filename: file.name, skipDuplicates: true },
       })
-      if (error) throw new Error(error.message || 'Import failed')
+      if (error) {
+        // Extract the real error from the edge function response body
+        let msg = error.message || 'Import failed'
+        try {
+          const body = typeof error.context?.json === 'function'
+            ? await error.context.json()
+            : error.context
+          if (body?.error) msg = body.error
+        } catch {}
+        throw new Error(msg)
+      }
 
       const parts = []
       if (data.tradesImported > 0) parts.push(`${data.tradesImported} угод`)
