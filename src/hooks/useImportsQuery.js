@@ -8,7 +8,7 @@ export function useImportsQuery() {
       const [{ data: iData, error: iError }, { data: pData, error: pError }] = await Promise.all([
         supabase
           .from('imports')
-          .select('*, portfolio:portfolios!inner(id, name)')
+          .select('*, portfolio:portfolios(id, name)')
           .order('imported_at', { ascending: false }),
         supabase
           .from('portfolios')

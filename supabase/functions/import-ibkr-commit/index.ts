@@ -21,6 +21,16 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
+    // Resolve calling user's ID from the JWT so the import record gets user_id set.
+    // Without this, the service-role INSERT creates the record with user_id = NULL,
+    // and the RLS SELECT policy (user_id = auth.uid()) makes it invisible to the user.
+    const authHeader = req.headers.get('Authorization')
+    let userId: string | null = null
+    if (authHeader) {
+      const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+      userId = user?.id ?? null
+    }
+
     // Re-parse CSV
     const parsed = parseIBKRCsv(csvText)
 
@@ -76,6 +86,7 @@ Deno.serve(async (req) => {
       p_dividends: parsed.dividends,
       p_ending_cash: parsed.endingCash,
       p_summary: summary,
+      p_user_id: userId,
     })
 
     if (error) {
