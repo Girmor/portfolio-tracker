@@ -12,6 +12,7 @@ export default function ImportTrades() {
   const [parsedData, setParsedData] = useState(null)
   const [duplicates, setDuplicates] = useState(new Set())
   const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState(null)
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -111,6 +112,8 @@ export default function ImportTrades() {
       setSelectedPortfolio(null)
       refreshAll()
     } catch (err) {
+      console.error('[ImportTrades] commit error:', err)
+      setImportError(err.message)
       toast.error(err.message)
     } finally {
       setImporting(false)
@@ -534,10 +537,18 @@ export default function ImportTrades() {
             </div>
           )}
 
+          {importError && (
+            <div className="mb-4 bg-red-50 border border-red-300 rounded-xl p-4">
+              <div className="font-semibold text-red-700 mb-1">Помилка імпорту:</div>
+              <div className="text-sm text-red-800 font-mono break-all">{importError}</div>
+              <button onClick={() => setImportError(null)} className="text-xs text-red-500 mt-2 hover:underline">Закрити</button>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-end">
             <button onClick={goBack} className="text-gray-500 px-4 py-2 text-sm hover:text-gray-700">Назад</button>
             <button
-              onClick={handleImport}
+              onClick={() => { setImportError(null); handleImport() }}
               disabled={importing || (newTrades.length === 0 && (!parsedData.dividends || parsedData.dividends.length === 0))}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
