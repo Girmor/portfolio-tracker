@@ -34,6 +34,10 @@ export default function ImportTrades() {
     setFile(f)
     try {
       const csvText = await f.text()
+
+      // Refresh JWT so edge function gateway doesn't reject with 401
+      await supabase.auth.refreshSession()
+
       const { data, error } = await supabase.functions.invoke('import-ibkr-preview', {
         body: { portfolioId: selectedPortfolio.id, csvText },
       })
@@ -84,6 +88,10 @@ export default function ImportTrades() {
         return
       }
       const csvText = await file.text()
+
+      // Refresh JWT before calling edge function — gateway rejects expired tokens (401)
+      await supabase.auth.refreshSession()
+
       const { data, error } = await supabase.functions.invoke('import-ibkr-commit', {
         body: { portfolioId: selectedPortfolio.id, csvText, filename: file.name, skipDuplicates: true },
       })
