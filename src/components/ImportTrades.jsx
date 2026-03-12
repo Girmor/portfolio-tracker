@@ -170,6 +170,9 @@ export default function ImportTrades() {
         await supabase.from('portfolios').update({ cash_balance: prevCash }).eq('id', imp.portfolio_id)
       }
 
+      // Delete import_rows so "Очистити" won't find stale records if clicked later
+      await supabase.from('import_rows').delete().eq('import_id', imp.id)
+
       await supabase.from('imports').update({ status: 'rolled_back' }).eq('id', imp.id)
       toast.success(`Імпорт "${imp.filename}" відкочено`)
       refreshAll()
@@ -206,7 +209,7 @@ export default function ImportTrades() {
       if (tradeIds.length > 0) {
         const { data: tradesData } = await supabase
           .from('trades').select('position_id').in('id', tradeIds)
-        positionIds = [...new Set((tradesData || []).map(t => t.position_id))]
+        positionIds = [...new Set((tradesData || []).map(t => t.position_id).filter(Boolean))]
       }
 
       if (tradeIds.length > 0) {
@@ -222,6 +225,9 @@ export default function ImportTrades() {
           await supabase.from('positions').delete().eq('id', posId)
         }
       }
+
+      // Delete import_rows so subsequent "Очистити" correctly returns "no orphans"
+      await supabase.from('import_rows').delete().eq('import_id', imp.id)
 
       toast.success(`Очищено: ${tradeIds.length} угод, ${dividendIds.length} дивідендів`)
       refreshAll()
