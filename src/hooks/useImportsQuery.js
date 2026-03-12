@@ -29,7 +29,9 @@ export function useRefreshImports() {
   const queryClient = useQueryClient()
   return () => {
     queryClient.invalidateQueries({ queryKey: ['imports'] })
-    queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+    queryClient.invalidateQueries({ queryKey: ['portfolios'] })   // list page position counts
+    queryClient.invalidateQueries({ queryKey: ['portfolio'] })    // detail page
     queryClient.invalidateQueries({ queryKey: ['trades'] })
+    queryClient.invalidateQueries({ queryKey: ['dividends'] })
   }
 }

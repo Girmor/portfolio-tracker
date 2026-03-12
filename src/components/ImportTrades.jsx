@@ -107,6 +107,24 @@ export default function ImportTrades() {
     }
   }
 
+  // Global sweep: delete every position that has zero trades across ALL user portfolios.
+  // Runs after any rollback/cleanup to catch orphaned positions left by earlier broken rollbacks.
+  // Uses 2 queries (all positions + all trade position_ids) instead of N+1 per-position checks.
+  async function sweepEmptyPositions() {
+    const [{ data: allPositions }, { data: tradePositions }] = await Promise.all([
+      supabase.from('positions').select('id'),
+      supabase.from('trades').select('position_id'),
+    ])
+    const occupiedIds = new Set((tradePositions || []).map(t => t.position_id))
+    const emptyIds = (allPositions || [])
+      .filter(p => !occupiedIds.has(p.id))
+      .map(p => p.id)
+    if (emptyIds.length > 0) {
+      await supabase.from('positions').delete().in('id', emptyIds)
+    }
+    return emptyIds.length
+  }
+
   async function handleRollback(imp) {
     if (!confirm('Відкотити цей імпорт? Усі імпортовані угоди будуть видалені.')) return
     try {
@@ -174,6 +192,10 @@ export default function ImportTrades() {
       await supabase.from('import_rows').delete().eq('import_id', imp.id)
 
       await supabase.from('imports').update({ status: 'rolled_back' }).eq('id', imp.id)
+
+      // Global sweep: remove any positions left with zero trades (cross-import orphans)
+      await sweepEmptyPositions()
+
       toast.success(`Імпорт "${imp.filename}" відкочено`)
       refreshAll()
     } catch (err) {
@@ -229,6 +251,9 @@ export default function ImportTrades() {
       // Delete import_rows so subsequent "Очистити" correctly returns "no orphans"
       await supabase.from('import_rows').delete().eq('import_id', imp.id)
 
+      // Global sweep: remove any positions still with zero trades (cross-import orphans)
+      await sweepEmptyPositions()
+
       toast.success(`Очищено: ${tradeIds.length} угод, ${dividendIds.length} дивідендів`)
       refreshAll()
     } catch (err) {
@@ -254,12 +279,25 @@ export default function ImportTrades() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Імпорт транзакцій</h2>
         {step === 1 && (
-          <button
-            onClick={() => document.getElementById('import-history')?.scrollIntoView({ behavior: 'smooth' })}
-            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50"
-          >
-            🕐 Історія імпортів
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const count = await sweepEmptyPositions()
+                refreshAll()
+                if (count > 0) toast.success(`Видалено ${count} порожніх позицій`)
+                else toast.success('Порожніх позицій не знайдено')
+              }}
+              className="flex items-center gap-1.5 text-sm text-orange-600 border border-orange-200 rounded-lg px-3 py-1.5 hover:bg-orange-50"
+            >
+              🧹 Очистити порожні позиції
+            </button>
+            <button
+              onClick={() => document.getElementById('import-history')?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50"
+            >
+              🕐 Історія імпортів
+            </button>
+          </div>
         )}
       </div>
 
