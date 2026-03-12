@@ -110,36 +110,123 @@ export default function ImportTrades() {
   async function handleRollback(imp) {
     if (!confirm('Відкотити цей імпорт? Усі імпортовані угоди будуть видалені.')) return
     try {
-      const { rollback_data } = imp
-      if (rollback_data.created_trade_ids?.length > 0) {
-        await supabase.from('trades').delete().in('id', rollback_data.created_trade_ids)
+      // The stored procedure only stores previous_cash_balance in rollback_data,
+      // NOT trade/dividend IDs. Use import_rows table which records every created record.
+      const { data: importRows } = await supabase
+        .from('import_rows')
+        .select('created_record_id, created_record_type')
+        .eq('import_id', imp.id)
+
+      const tradeIds = (importRows || [])
+        .filter(r => r.created_record_type === 'trade')
+        .map(r => r.created_record_id)
+
+      const dividendIds = (importRows || [])
+        .filter(r => r.created_record_type === 'dividend')
+        .map(r => r.created_record_id)
+
+      // Fetch position IDs from the trades BEFORE deleting them
+      let positionIds = []
+      if (tradeIds.length > 0) {
+        const { data: tradesData } = await supabase
+          .from('trades')
+          .select('position_id')
+          .in('id', tradeIds)
+        positionIds = [...new Set((tradesData || []).map(t => t.position_id))]
       }
-      if (rollback_data.created_dividend_ids?.length > 0) {
-        await supabase.from('dividends').delete().in('id', rollback_data.created_dividend_ids)
+
+      // Delete trades
+      if (tradeIds.length > 0) {
+        await supabase.from('trades').delete().in('id', tradeIds)
       }
-      for (const posId of (rollback_data.created_position_ids || [])) {
-        const { data: remaining } = await supabase.from('trades').select('id').eq('position_id', posId).limit(1)
+
+      // Delete dividends
+      if (dividendIds.length > 0) {
+        await supabase.from('dividends').delete().in('id', dividendIds)
+      }
+
+      // Delete positions that are now empty (no remaining trades)
+      for (const posId of positionIds) {
+        const { data: remaining } = await supabase
+          .from('trades').select('id').eq('position_id', posId).limit(1)
         if (!remaining || remaining.length === 0) {
           await supabase.from('positions').delete().eq('id', posId)
         }
       }
-      if (rollback_data.previous_cash_balance != null) {
-        const { data: portfolio } = await supabase.from('portfolios').select('cash_balance').eq('id', imp.portfolio_id).single()
+
+      // Restore cash balance if it was recorded
+      const prevCash = imp.rollback_data?.previous_cash_balance
+      if (prevCash != null) {
+        const { data: portfolio } = await supabase
+          .from('portfolios').select('cash_balance').eq('id', imp.portfolio_id).single()
         const currentCash = Number(portfolio?.cash_balance) || 0
-        await supabase.from('cash_adjustments').insert({
+        await supabase.from('adjustments').insert({
           portfolio_id: imp.portfolio_id,
           previous_balance: currentCash,
-          new_balance: rollback_data.previous_cash_balance,
+          new_balance: prevCash,
           date: new Date().toISOString().split('T')[0],
           notes: `Відкат імпорту — ${imp.filename}`,
         })
-        await supabase.from('portfolios').update({ cash_balance: rollback_data.previous_cash_balance }).eq('id', imp.portfolio_id)
+        await supabase.from('portfolios').update({ cash_balance: prevCash }).eq('id', imp.portfolio_id)
       }
+
       await supabase.from('imports').update({ status: 'rolled_back' }).eq('id', imp.id)
       toast.success(`Імпорт "${imp.filename}" відкочено`)
       refreshAll()
     } catch (err) {
       toast.error(`Помилка відкату: ${err.message}`)
+    }
+  }
+
+  // Cleanup orphaned trades/dividends/positions for already-rolled-back imports.
+  // The old rollback code was silently a no-op (rollback_data had no IDs),
+  // so records were left behind. This lets the user clean them up retroactively.
+  async function handleCleanupOrphans(imp) {
+    if (!confirm('Видалити залишкові угоди та позиції цього імпорту?')) return
+    try {
+      const { data: importRows } = await supabase
+        .from('import_rows')
+        .select('created_record_id, created_record_type')
+        .eq('import_id', imp.id)
+
+      const tradeIds = (importRows || [])
+        .filter(r => r.created_record_type === 'trade')
+        .map(r => r.created_record_id)
+
+      const dividendIds = (importRows || [])
+        .filter(r => r.created_record_type === 'dividend')
+        .map(r => r.created_record_id)
+
+      if (tradeIds.length === 0 && dividendIds.length === 0) {
+        toast.success('Залишкових даних не знайдено')
+        return
+      }
+
+      let positionIds = []
+      if (tradeIds.length > 0) {
+        const { data: tradesData } = await supabase
+          .from('trades').select('position_id').in('id', tradeIds)
+        positionIds = [...new Set((tradesData || []).map(t => t.position_id))]
+      }
+
+      if (tradeIds.length > 0) {
+        await supabase.from('trades').delete().in('id', tradeIds)
+      }
+      if (dividendIds.length > 0) {
+        await supabase.from('dividends').delete().in('id', dividendIds)
+      }
+      for (const posId of positionIds) {
+        const { data: remaining } = await supabase
+          .from('trades').select('id').eq('position_id', posId).limit(1)
+        if (!remaining || remaining.length === 0) {
+          await supabase.from('positions').delete().eq('id', posId)
+        }
+      }
+
+      toast.success(`Очищено: ${tradeIds.length} угод, ${dividendIds.length} дивідендів`)
+      refreshAll()
+    } catch (err) {
+      toast.error(`Помилка очищення: ${err.message}`)
     }
   }
 
@@ -448,6 +535,11 @@ export default function ImportTrades() {
                       {imp.status === 'active' && (
                         <button onClick={() => handleRollback(imp)} className="text-red-500 hover:text-red-700 text-xs font-medium">
                           Відкотити
+                        </button>
+                      )}
+                      {imp.status === 'rolled_back' && (
+                        <button onClick={() => handleCleanupOrphans(imp)} className="text-orange-500 hover:text-orange-700 text-xs font-medium">
+                          Очистити
                         </button>
                       )}
                     </td>
