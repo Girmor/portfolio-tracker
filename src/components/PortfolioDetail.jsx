@@ -220,17 +220,7 @@ export default function PortfolioDetail() {
     }
   }
 
-  if (isLoading) return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Link to="/portfolios" className="text-gray-400 hover:text-gray-600">← Назад</Link>
-        <div className="h-7 bg-gray-200 rounded w-48 animate-pulse" />
-      </div>
-      <SkeletonDetail />
-    </div>
-  )
-  if (error || !portfolio) return <div className="text-red-500">Портфель не знайдено</div>
-
+  // All computed values MUST be before any conditional returns (Rules of Hooks)
   const cashBalance = Number(portfolio?.cash_balance) || 0
   const posCalcs = positions.map(p => ({ pos: p, calc: calcPosition(p) }))
   const activePositions = posCalcs.filter(({ calc }) => calc.totalQty > 0)
@@ -255,7 +245,7 @@ export default function PortfolioDetail() {
     !worst || item.calc.unrealizedPnlPercent < worst.calc.unrealizedPnlPercent ? item : worst
   , null)
 
-  // Holdings TanStack Table
+  // Holdings TanStack Table — defined before early returns (Rules of Hooks)
   const holdingsColumns = useMemo(() => [
     {
       id: 'ticker',
@@ -363,6 +353,18 @@ export default function PortfolioDetail() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
+
+  // Early returns AFTER all hooks
+  if (isLoading) return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <Link to="/portfolios" className="text-gray-400 hover:text-gray-600">← Назад</Link>
+        <div className="h-7 bg-gray-200 rounded w-48 animate-pulse" />
+      </div>
+      <SkeletonDetail />
+    </div>
+  )
+  if (error || !portfolio) return <div className="text-red-500">Портфель не знайдено</div>
 
   return (
     <div>

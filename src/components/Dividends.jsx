@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -78,6 +78,16 @@ export default function Dividends() {
     if (years.size === 0) years.add(new Date().getFullYear())
     return [...years].sort((a, b) => b - a)
   }, [dividends])
+
+  // Auto-select the most recent year with data when dividends first load
+  useEffect(() => {
+    if (dividends.length === 0) return
+    const yearsWithData = [...new Set(dividends.map(d => new Date(d.date).getFullYear()))]
+    const mostRecent = Math.max(...yearsWithData)
+    if (!yearsWithData.includes(selectedYear)) {
+      setSelectedYear(mostRecent)
+    }
+  }, [dividends.length])
 
   const yearDividends = useMemo(
     () => dividends.filter(d => new Date(d.date).getFullYear() === selectedYear),
