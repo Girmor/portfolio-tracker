@@ -35,11 +35,13 @@ export default function ImportTrades() {
     try {
       const csvText = await f.text()
 
-      // Refresh JWT so edge function gateway doesn't reject with 401
-      await supabase.auth.refreshSession()
+      // Get fresh token explicitly for the edge function gateway
+      const { data: previewRefresh } = await supabase.auth.refreshSession()
+      const previewToken = previewRefresh?.session?.access_token
 
       const { data, error } = await supabase.functions.invoke('import-ibkr-preview', {
         body: { portfolioId: selectedPortfolio.id, csvText },
+        ...(previewToken ? { headers: { Authorization: `Bearer ${previewToken}` } } : {}),
       })
       if (error) throw new Error(error.message || 'Preview failed')
       const previewResult = {
@@ -89,11 +91,16 @@ export default function ImportTrades() {
       }
       const csvText = await file.text()
 
-      // Refresh JWT before calling edge function — gateway rejects expired tokens (401)
-      await supabase.auth.refreshSession()
+      // Get a fresh access token explicitly and pass it in the header.
+      // supabase.functions.invoke may use a cached/expired token internally,
+      // so we force-refresh and inject the new token ourselves.
+      const { data: refreshResult } = await supabase.auth.refreshSession()
+      const accessToken = refreshResult?.session?.access_token
+      if (!accessToken) throw new Error('Сесія закінчилась — перезавантажте сторінку і увійдіть знову.')
 
       const { data, error } = await supabase.functions.invoke('import-ibkr-commit', {
         body: { portfolioId: selectedPortfolio.id, csvText, filename: file.name, skipDuplicates: true },
+        headers: { Authorization: `Bearer ${accessToken}` },
       })
       if (error) {
         // Extract the real error from the edge function response body
