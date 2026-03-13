@@ -30,6 +30,13 @@ const schema = z.object({
   notes: z.string().optional(),
 })
 
+const tooltipStyle = {
+  background: '#1e293b',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 8,
+  color: '#e2e8f0',
+}
+
 export default function Dividends() {
   const [showForm, setShowForm] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -70,7 +77,6 @@ export default function Dividends() {
     }
   }
 
-  // Computed data
   const total = dividends.reduce((sum, d) => sum + Number(d.amount), 0)
 
   const availableYears = useMemo(() => {
@@ -79,11 +85,10 @@ export default function Dividends() {
     return [...years].sort((a, b) => b - a)
   }, [dividends])
 
-  // Auto-select the most recent year with data if the current selectedYear has no dividends
   useEffect(() => {
     if (availableYears.length === 0) return
     if (!availableYears.includes(selectedYear)) {
-      setSelectedYear(availableYears[0]) // availableYears is sorted desc → [0] is most recent
+      setSelectedYear(availableYears[0])
     }
   }, [availableYears])
 
@@ -124,50 +129,49 @@ export default function Dividends() {
       .sort((a, b) => b.amount - a.amount)
   }, [yearDividends, yearTotal])
 
-  // TanStack Table
   const columns = useMemo(() => [
     {
       id: 'date',
       accessorFn: row => row.date,
       header: ({ column }) => (
-        <button className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Дата <span className="text-[10px] text-gray-400">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+        <button className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Дата <span className="text-[10px] text-slate-500">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
         </button>
       ),
-      cell: ({ getValue }) => <span className="text-gray-700">{formatDate(getValue())}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{formatDate(getValue())}</span>,
     },
     {
       id: 'ticker',
       accessorFn: row => row.ticker,
       header: ({ column }) => (
-        <button className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Тікер <span className="text-[10px] text-gray-400">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+        <button className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Тікер <span className="text-[10px] text-slate-500">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
         </button>
       ),
-      cell: ({ getValue }) => <span className="font-medium text-gray-800">{getValue()}</span>,
+      cell: ({ getValue }) => <span className="font-medium text-white">{getValue()}</span>,
     },
     {
       id: 'amount',
       accessorFn: row => Number(row.amount),
       header: ({ column }) => (
-        <button className="flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900 ml-auto" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Сума <span className="text-[10px] text-gray-400">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+        <button className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200 ml-auto" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Сума <span className="text-[10px] text-slate-500">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
         </button>
       ),
-      cell: ({ getValue }) => <span className="font-medium text-green-600">{formatMoney(getValue())}</span>,
+      cell: ({ getValue }) => <span className="font-medium text-green-400">{formatMoney(getValue())}</span>,
     },
     {
       id: 'notes',
       accessorFn: row => row.notes || '',
       header: 'Нотатки',
-      cell: ({ getValue }) => <span className="text-gray-500">{getValue() || '—'}</span>,
+      cell: ({ getValue }) => <span className="text-slate-400">{getValue() || '—'}</span>,
       enableSorting: false,
     },
     {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <button onClick={() => handleDelete(row.original.id)} className="text-red-500 hover:text-red-700 text-xs">Вид.</button>
+        <button onClick={() => handleDelete(row.original.id)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Вид.</button>
       ),
       enableSorting: false,
     },
@@ -186,10 +190,10 @@ export default function Dividends() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Дивіденди та доходи</h2>
+        <h2 className="text-2xl font-bold text-white">Дивіденди та доходи</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           + Додати дохід
         </button>
@@ -200,15 +204,15 @@ export default function Dividends() {
         <button
           onClick={() => setSelectedYear(y => y - 1)}
           disabled={!availableYears.includes(selectedYear - 1) && selectedYear <= Math.min(...availableYears)}
-          className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-lg px-1"
+          className="text-slate-400 hover:text-slate-200 disabled:opacity-30 text-lg px-1 transition-colors"
         >
           ←
         </button>
-        <span className="text-lg font-semibold text-gray-700 min-w-[60px] text-center">{selectedYear}</span>
+        <span className="text-lg font-semibold text-slate-200 min-w-[60px] text-center">{selectedYear}</span>
         <button
           onClick={() => setSelectedYear(y => y + 1)}
           disabled={selectedYear >= new Date().getFullYear()}
-          className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-lg px-1"
+          className="text-slate-400 hover:text-slate-200 disabled:opacity-30 text-lg px-1 transition-colors"
         >
           →
         </button>
@@ -218,33 +222,33 @@ export default function Dividends() {
       {isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 animate-pulse">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
-              <div className="h-6 bg-gray-200 rounded w-3/4" />
+            <div key={i} className="glass-card rounded-xl p-4">
+              <div className="h-3 bg-white/10 rounded w-1/2 mb-2" />
+              <div className="h-6 bg-white/10 rounded w-3/4" />
             </div>
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-sm text-gray-500">Всього (весь час)</div>
-            <div className="text-xl font-bold text-green-600">{formatMoney(total)}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{dividends.length} записів</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-sm text-slate-400">Всього (весь час)</div>
+            <div className="text-xl font-bold text-green-400">{formatMoney(total)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{dividends.length} записів</div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-sm text-gray-500">За {selectedYear}</div>
-            <div className="text-xl font-bold text-green-600">{formatMoney(yearTotal)}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{yearDividends.length} записів</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-sm text-slate-400">За {selectedYear}</div>
+            <div className="text-xl font-bold text-green-400">{formatMoney(yearTotal)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{yearDividends.length} записів</div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-sm text-gray-500">Середнє / міс</div>
-            <div className="text-xl font-bold text-gray-800">{formatMoney(avgPerMonth)}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{monthsWithData} міс. з виплатами</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-sm text-slate-400">Середнє / міс</div>
+            <div className="text-xl font-bold text-white">{formatMoney(avgPerMonth)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{monthsWithData} міс. з виплатами</div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-sm text-gray-500">Тікерів</div>
-            <div className="text-xl font-bold text-gray-800">{tickerData.length}</div>
-            <div className="text-xs text-gray-400 mt-0.5 truncate">
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-sm text-slate-400">Тікерів</div>
+            <div className="text-xl font-bold text-white">{tickerData.length}</div>
+            <div className="text-xs text-slate-500 mt-0.5 truncate">
               {tickerData.slice(0, 4).map(t => t.ticker).join(', ')}
               {tickerData.length > 4 ? '...' : ''}
             </div>
@@ -255,13 +259,13 @@ export default function Dividends() {
       {/* Charts row */}
       {yearDividends.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Помісячні дивіденди — {selectedYear}</h3>
+          <div className="lg:col-span-2 glass-card rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-slate-200 mb-4">Помісячні дивіденди — {selectedYear}</h3>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${v}`} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
                 <Tooltip
                   formatter={(v) => [formatMoney(v), 'Дивіденди']}
                   labelFormatter={(label, payload) => {
@@ -271,30 +275,31 @@ export default function Dividends() {
                     }
                     return label
                   }}
+                  contentStyle={tooltipStyle}
                 />
                 <Bar dataKey="amount" radius={[4, 4, 0, 0]} maxBarSize={48}>
                   {monthlyData.map((entry, i) => (
-                    <Cell key={i} fill={entry.amount > 0 ? '#10B981' : '#E5E7EB'} />
+                    <Cell key={i} fill={entry.amount > 0 ? '#10B981' : 'rgba(255,255,255,0.08)'} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">По тікерах — {selectedYear}</h3>
+          <div className="glass-card rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-slate-200 mb-4">По тікерах — {selectedYear}</h3>
             {tickerData.length > 0 ? (
               <div className="space-y-3">
                 {tickerData.map((t, i) => (
                   <div key={t.ticker}>
                     <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="font-medium text-gray-800">{t.ticker}</span>
-                      <span className="text-gray-600">
+                      <span className="font-medium text-white">{t.ticker}</span>
+                      <span className="text-slate-300">
                         {formatMoney(t.amount)}
-                        <span className="text-gray-400 ml-1 text-xs">({t.percent}%)</span>
+                        <span className="text-slate-500 ml-1 text-xs">({t.percent}%)</span>
                       </span>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2.5">
+                    <div className="w-full bg-white/10 rounded-full h-2.5">
                       <div
                         className="h-2.5 rounded-full transition-all"
                         style={{
@@ -307,7 +312,7 @@ export default function Dividends() {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-400 text-sm text-center py-8">Немає даних</p>
+              <p className="text-slate-500 text-sm text-center py-8">Немає даних</p>
             )}
           </div>
         </div>
@@ -315,51 +320,51 @@ export default function Dividends() {
 
       {/* Add form */}
       {showForm && (
-        <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-3">Новий дохід</h3>
+        <form onSubmit={handleSubmit(onSubmit)} className="glass-card rounded-xl p-4 mb-6">
+          <h3 className="font-semibold text-slate-200 mb-3">Новий дохід</h3>
           <div className="flex gap-3 items-start flex-wrap">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Тікер</label>
+              <label className="block text-sm text-slate-300 mb-1">Тікер</label>
               <input
                 {...register('ticker')}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="glass-input w-28"
                 placeholder="AAPL"
               />
-              {errors.ticker && <p className="text-red-500 text-xs mt-1">{errors.ticker.message}</p>}
+              {errors.ticker && <p className="text-red-400 text-xs mt-1">{errors.ticker.message}</p>}
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Сума (USD)</label>
+              <label className="block text-sm text-slate-300 mb-1">Сума (USD)</label>
               <input
                 type="number"
                 step="any"
                 {...register('amount')}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="glass-input w-32"
                 placeholder="0.00"
               />
-              {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount.message}</p>}
+              {errors.amount && <p className="text-red-400 text-xs mt-1">{errors.amount.message}</p>}
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Дата</label>
+              <label className="block text-sm text-slate-300 mb-1">Дата</label>
               <input
                 type="date"
                 {...register('date')}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="glass-input"
               />
             </div>
             <div className="flex-1">
-              <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
+              <label className="block text-sm text-slate-300 mb-1">Нотатки</label>
               <input
                 type="text"
                 {...register('notes')}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="glass-input w-full"
                 placeholder="Необов'язково"
               />
             </div>
             <div className="flex gap-2 pt-6">
-              <button type="submit" disabled={createDividend.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              <button type="submit" disabled={createDividend.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                 Додати
               </button>
-              <button type="button" onClick={() => { setShowForm(false); reset() }} className="text-gray-500 px-3 py-2 text-sm">
+              <button type="button" onClick={() => { setShowForm(false); reset() }} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">
                 Скасувати
               </button>
             </div>
@@ -369,25 +374,25 @@ export default function Dividends() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden animate-pulse">
-          <div className="h-10 bg-gray-100 border-b border-gray-200" />
+        <div className="glass-card rounded-xl overflow-hidden animate-pulse">
+          <div className="h-10 bg-white/5 border-b border-white/10" />
           {[1, 2, 3].map(i => (
-            <div key={i} className="flex gap-4 px-4 py-3 border-b border-gray-100">
-              {[1, 2, 3, 4, 5].map(j => <div key={j} className="h-4 bg-gray-100 rounded flex-1" />)}
+            <div key={i} className="flex gap-4 px-4 py-3 border-b border-white/[0.06]">
+              {[1, 2, 3, 4, 5].map(j => <div key={j} className="h-4 bg-white/[0.06] rounded flex-1" />)}
             </div>
           ))}
         </div>
       ) : yearDividends.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-slate-400">
           <p className="text-lg mb-2">Немає записів за {selectedYear} рік</p>
           <p className="text-sm">Скористайтесь стрілками для перегляду інших років</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               {table.getHeaderGroups().map(hg => (
-                <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                <tr key={hg.id} className="border-b border-white/10 bg-white/5">
                   {hg.headers.map(header => (
                     <th key={header.id} className={`py-3 px-4 ${header.id === 'amount' || header.id === 'actions' ? 'text-right' : 'text-left'}`}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -398,7 +403,7 @@ export default function Dividends() {
             </thead>
             <tbody>
               {table.getRowModel().rows.map(row => (
-                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
                   {row.getVisibleCells().map(cell => (
                     <td key={cell.id} className={`py-3 px-4 ${cell.column.id === 'amount' || cell.column.id === 'actions' ? 'text-right' : ''}`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

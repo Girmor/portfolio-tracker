@@ -10,10 +10,10 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
 
 function StatCardSkeleton() {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
-      <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
-      <div className="h-6 bg-gray-200 rounded w-3/4 mb-2" />
-      <div className="h-3 bg-gray-100 rounded w-1/3" />
+    <div className="glass-card rounded-xl p-4 animate-pulse">
+      <div className="h-3 bg-white/10 rounded w-1/2 mb-2" />
+      <div className="h-6 bg-white/10 rounded w-3/4 mb-2" />
+      <div className="h-3 bg-white/[0.06] rounded w-1/3" />
     </div>
   )
 }
@@ -88,7 +88,7 @@ export default function Overview() {
   if (loading) {
     return (
       <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Огляд</h2>
+        <h2 className="text-2xl font-bold text-white mb-6">Огляд</h2>
         <div className="grid grid-cols-2 gap-3 mb-6 lg:w-2/3">
           {[1, 2, 3, 4].map(i => <StatCardSkeleton key={i} />)}
         </div>
@@ -98,63 +98,59 @@ export default function Overview() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Огляд</h2>
+      <h2 className="text-2xl font-bold text-white mb-6">Огляд</h2>
 
       {/* Summary Stats + Allocation Row */}
       <div className="flex flex-col lg:flex-row gap-3 mb-6">
         {/* Stats Cards — 2/3 */}
         <div className="lg:w-2/3 grid grid-cols-2 gap-3">
-          {/* Card 1: Total Capital */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 mb-1">Загальний капітал</div>
-            <div className="text-xl font-bold text-gray-800">{formatMoney(totalCapital)}</div>
-            <div className="text-xs text-gray-400 mt-1.5">Бюджет: {formatMoney(budgetTotal)}</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">Загальний капітал</div>
+            <div className="text-xl font-bold text-white">{formatMoney(totalCapital)}</div>
+            <div className="text-xs text-slate-500 mt-1.5">Бюджет: {formatMoney(budgetTotal)}</div>
           </div>
 
-          {/* Card 2: Investments + P&L */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 mb-1">Інвестиції</div>
-            <div className="text-xl font-bold text-gray-800">{formatMoney(investmentTotal)}</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">Інвестиції</div>
+            <div className="text-xl font-bold text-white">{formatMoney(investmentTotal)}</div>
             <div className={`text-xs mt-1.5 ${pnlColor(totalPnl)}`}>
               P&L: {formatMoney(totalPnl)} ({formatPercent(totalPnlPercent)})
             </div>
           </div>
 
-          {/* Card 3: Best Portfolio */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 mb-1">Найкращий портфель</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">Найкращий портфель</div>
             {bestPortfolio && portfolios.length > 1 ? (
               <>
-                <div className="text-xl font-bold text-gray-800">{bestPortfolio.portfolio.name}</div>
-                <div className="text-xs text-green-600 mt-1.5">
+                <div className="text-xl font-bold text-white">{bestPortfolio.portfolio.name}</div>
+                <div className="text-xs text-green-400 mt-1.5">
                   {formatMoney(bestPortfolio.pnl)} &nbsp;{formatPercent(bestPortfolio.pnlPercent)}
                 </div>
               </>
             ) : (
-              <div className="text-sm text-gray-400 mt-1">—</div>
+              <div className="text-sm text-slate-500 mt-1">—</div>
             )}
           </div>
 
-          {/* Card 4: Worst Portfolio */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 mb-1">Найгірший портфель</div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">Найгірший портфель</div>
             {worstPortfolio && portfolios.length > 1 ? (
               <>
-                <div className="text-xl font-bold text-gray-800">{worstPortfolio.portfolio.name}</div>
-                <div className="text-xs text-red-600 mt-1.5">
+                <div className="text-xl font-bold text-white">{worstPortfolio.portfolio.name}</div>
+                <div className="text-xs text-red-400 mt-1.5">
                   {formatMoney(worstPortfolio.pnl)} &nbsp;{formatPercent(worstPortfolio.pnlPercent)}
                 </div>
               </>
             ) : (
-              <div className="text-sm text-gray-400 mt-1">—</div>
+              <div className="text-sm text-slate-500 mt-1">—</div>
             )}
           </div>
         </div>
 
         {/* Allocation — 1/3 */}
         {pieData.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4 lg:w-1/3 shrink-0">
-            <div className="text-xs text-gray-500 mb-2">Розподіл капіталу</div>
+          <div className="glass-card rounded-xl p-4 lg:w-1/3 shrink-0">
+            <div className="text-xs text-slate-400 mb-2">Розподіл капіталу</div>
             <div className="flex items-center justify-center gap-5">
               <div className="w-32 h-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -169,7 +165,10 @@ export default function Overview() {
                     >
                       {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v)} />
+                    <Tooltip
+                      formatter={(v) => formatMoney(v)}
+                      contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -184,8 +183,8 @@ export default function Overview() {
                         className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: COLORS[i % COLORS.length] }}
                       />
-                      <span className="text-sm text-gray-700 whitespace-nowrap">{item.name}</span>
-                      <span className="text-sm text-gray-400 tabular-nums">{percent}%</span>
+                      <span className="text-sm text-slate-200 whitespace-nowrap">{item.name}</span>
+                      <span className="text-sm text-slate-400 tabular-nums">{percent}%</span>
                     </div>
                   )
                 })}
@@ -200,14 +199,17 @@ export default function Overview() {
 
       {/* P&L by portfolios */}
       {barData.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">P&L по портфелях</h3>
+        <div className="glass-card rounded-xl p-5 mb-6">
+          <h3 className="text-sm font-semibold text-slate-200 mb-4">P&L по портфелях</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => formatMoney(v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+              <Tooltip
+                formatter={(v) => formatMoney(v)}
+                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+              />
               <Bar dataKey="pnl" fill="#3B82F6" radius={[4, 4, 0, 0]}>
                 {barData.map((entry, i) => (
                   <Cell key={i} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
@@ -219,25 +221,25 @@ export default function Overview() {
       )}
 
       {/* Portfolio list */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Портфелі</h3>
+      <div className="glass-card rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-slate-200 mb-4">Портфелі</h3>
         {portfolios.length === 0 ? (
-          <p className="text-gray-500 text-sm">
-            Немає портфелів. <Link to="/portfolios" className="text-blue-600 hover:underline">Створити</Link>
+          <p className="text-slate-400 text-sm">
+            Немає портфелів. <Link to="/portfolios" className="text-blue-400 hover:underline">Створити</Link>
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-1">
             {portfolios.map(p => {
               const val = calcPortfolioValue(p)
               const pnl = calcPortfolioPnl(p)
               return (
-                <Link key={p.id} to={`/portfolios/${p.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <Link key={p.id} to={`/portfolios/${p.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
                   <div>
-                    <div className="font-medium text-gray-800">{p.name}</div>
-                    <div className="text-xs text-gray-500">{(p.positions || []).length} позицій</div>
+                    <div className="font-medium text-slate-200">{p.name}</div>
+                    <div className="text-xs text-slate-500">{(p.positions || []).length} позицій</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-medium text-gray-800">{formatMoney(val)}</div>
+                    <div className="font-medium text-white">{formatMoney(val)}</div>
                     <div className={`text-xs ${pnlColor(pnl)}`}>{formatMoney(pnl)}</div>
                   </div>
                 </Link>

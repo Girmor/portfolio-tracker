@@ -1,1 +1,85 @@
 @import "tailwindcss";
+
+/* ─── Global dark gradient background ───────────────────────────────────── */
+html,
+body {
+  background:
+    radial-gradient(circle at 15% 20%, rgba(120, 119, 198, 0.28), transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(0, 180, 255, 0.16), transparent 38%),
+    linear-gradient(135deg, #0f172a 0%, #1a2744 55%, #0f172a 100%);
+  min-height: 100vh;
+  background-attachment: fixed;
+}
+
+#root {
+  background: transparent;
+}
+
+/* ─── Glass utilities ────────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.20);
+}
+
+.glass-sidebar {
+  background: rgba(10, 18, 35, 0.65);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-modal {
+  background: rgba(10, 18, 35, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.50);
+}
+
+/* ─── Glass form inputs ──────────────────────────────────────────────────── */
+.glass-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.glass-input::placeholder {
+  color: rgba(148, 163, 184, 0.50);
+}
+
+.glass-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Dark options for select elements */
+option {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }

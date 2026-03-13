@@ -51,6 +51,13 @@ const cashflowSchema = z.object({
   investments: z.coerce.number().min(0),
 })
 
+const tooltipStyle = {
+  background: '#1e293b',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 8,
+  color: '#e2e8f0',
+}
+
 export default function Budget() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -174,24 +181,24 @@ export default function Budget() {
 
   const totalUsd = (totals.USD || 0) + (totals.EUR || 0) * 1.08 + (totals.UAH || 0) / 41.5
 
-  if (budgetLoading) return <div className="text-gray-500 animate-pulse">Завантаження...</div>
+  if (budgetLoading) return <div className="text-slate-400 animate-pulse">Завантаження...</div>
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Бюджет</h2>
+        <h2 className="text-2xl font-bold text-white">Бюджет</h2>
         <button
           onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '' }) }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           + Додати рахунок
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-        <div className="text-sm text-gray-500 mb-1">Загальний бюджет (в USD)</div>
-        <div className="text-2xl font-bold text-gray-800">{formatMoney(totalUsd)}</div>
-        <div className="flex gap-4 mt-2 text-sm text-gray-600">
+      <div className="glass-card rounded-xl p-5 mb-6">
+        <div className="text-sm text-slate-400 mb-1">Загальний бюджет (в USD)</div>
+        <div className="text-2xl font-bold text-white">{formatMoney(totalUsd)}</div>
+        <div className="flex gap-4 mt-2 text-sm text-slate-300">
           {Object.entries(totals).map(([cur, total]) => (
             total > 0 && <span key={cur}>{CURRENCY_ICONS[cur]} {formatMoney(total, cur)}</span>
           ))}
@@ -199,45 +206,42 @@ export default function Budget() {
       </div>
 
       {showForm && (
-        <form onSubmit={hsBudget(onBudgetSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-3">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
+        <form onSubmit={hsBudget(onBudgetSubmit)} className="glass-card rounded-xl p-4 mb-6">
+          <h3 className="font-semibold text-slate-200 mb-3">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
           <div className="flex gap-3 items-start">
             <div className="flex-1">
-              <label className="block text-sm text-gray-600 mb-1">Назва</label>
+              <label className="block text-sm text-slate-300 mb-1">Назва</label>
               <input
                 {...rBudget('label')}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="glass-input w-full"
                 placeholder="Монобанк"
               />
-              {eBudget.label && <p className="text-red-500 text-xs mt-1">{eBudget.label.message}</p>}
+              {eBudget.label && <p className="text-red-400 text-xs mt-1">{eBudget.label.message}</p>}
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Валюта</label>
-              <select
-                {...rBudget('currency')}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <label className="block text-sm text-slate-300 mb-1">Валюта</label>
+              <select {...rBudget('currency')} className="glass-input">
                 <option value="UAH">UAH</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Сума</label>
+              <label className="block text-sm text-slate-300 mb-1">Сума</label>
               <input
                 type="number"
                 step="any"
                 {...rBudget('amount')}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="glass-input w-32"
                 placeholder="0.00"
               />
-              {eBudget.amount && <p className="text-red-500 text-xs mt-1">{eBudget.amount.message}</p>}
+              {eBudget.amount && <p className="text-red-400 text-xs mt-1">{eBudget.amount.message}</p>}
             </div>
             <div className="flex gap-2 pt-6">
-              <button type="submit" disabled={createBudget.isPending || updateBudget.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              <button type="submit" disabled={createBudget.isPending || updateBudget.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                 {editingId ? 'Зберегти' : 'Додати'}
               </button>
-              <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-500 px-3 py-2 text-sm">Скасувати</button>
+              <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">Скасувати</button>
             </div>
           </div>
         </form>
@@ -246,26 +250,26 @@ export default function Budget() {
       {Object.entries(grouped).map(([currency, list]) =>
         list.length > 0 && (
           <div key={currency} className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">
+            <h3 className="text-lg font-semibold text-slate-200 mb-3">
               {CURRENCY_ICONS[currency]} {currency}
-              <span className="text-sm font-normal text-gray-500 ml-2">Всього: {formatMoney(totals[currency], currency)}</span>
+              <span className="text-sm font-normal text-slate-400 ml-2">Всього: {formatMoney(totals[currency], currency)}</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {list.map(item => (
-                <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                <div key={item.id} className="glass-card rounded-xl p-4 hover:bg-white/[0.09] transition-colors">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="font-medium text-gray-800">{item.label}</div>
+                      <div className="font-medium text-slate-200">{item.label}</div>
                       <div
-                        className="text-xl font-bold text-gray-800 mt-1 cursor-pointer hover:text-blue-600"
+                        className="text-xl font-bold text-white mt-1 cursor-pointer hover:text-blue-400 transition-colors"
                         onClick={() => handleUpdateAmount(item)}
                       >
                         {formatMoney(item.amount, item.currency)}
                       </div>
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={() => startEditBudget(item)} className="text-gray-400 hover:text-blue-600 text-xs px-1">Ред.</button>
-                      <button onClick={() => handleDelete(item.id)} className="text-gray-400 hover:text-red-600 text-xs px-1">Вид.</button>
+                      <button onClick={() => startEditBudget(item)} className="text-slate-500 hover:text-blue-400 text-xs px-1 transition-colors">Ред.</button>
+                      <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 text-xs px-1 transition-colors">Вид.</button>
                     </div>
                   </div>
                 </div>
@@ -276,23 +280,23 @@ export default function Budget() {
       )}
 
       {items.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-slate-400">
           <p className="text-lg mb-2">Немає рахунків</p>
           <p className="text-sm">Додайте рахунки для відстеження готівки та балансів</p>
         </div>
       )}
 
-      <hr className="border-gray-200 my-8" />
+      <hr className="border-white/10 my-8" />
 
       {/* Cashflow section */}
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-bold text-gray-800">Статистика балансу</h2>
+        <h2 className="text-xl font-bold text-white">Статистика балансу</h2>
         <div className="flex items-center gap-3">
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <div className="flex bg-white/8 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('chart')}
               title="Графік"
-              className={`p-1.5 rounded-md transition-all ${viewMode === 'chart' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'chart' ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="1" y="10" width="3" height="7" rx="1" fill="currentColor"/>
@@ -304,7 +308,7 @@ export default function Budget() {
             <button
               onClick={() => setViewMode('table')}
               title="Таблиця"
-              className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="1" y="3" width="16" height="2.5" rx="1" fill="currentColor"/>
@@ -315,7 +319,7 @@ export default function Budget() {
           </div>
           <button
             onClick={() => { setShowCashflowForm(true); setEditingCashflowId(null); rsCashflow({ month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' }) }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             + Додати місяць
           </button>
@@ -323,46 +327,46 @@ export default function Budget() {
       </div>
 
       {/* Year selector */}
-      <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-        <button onClick={() => setSelectedYear(y => y - 1)} className="hover:text-gray-900 px-1">◂</button>
-        <span className="font-medium w-10 text-center">{selectedYear}</span>
-        <button onClick={() => setSelectedYear(y => y + 1)} disabled={selectedYear >= new Date().getFullYear()} className="hover:text-gray-900 px-1 disabled:opacity-30">▸</button>
+      <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
+        <button onClick={() => setSelectedYear(y => y - 1)} className="hover:text-slate-200 px-1 transition-colors">◂</button>
+        <span className="font-medium w-10 text-center text-slate-200">{selectedYear}</span>
+        <button onClick={() => setSelectedYear(y => y + 1)} disabled={selectedYear >= new Date().getFullYear()} className="hover:text-slate-200 px-1 disabled:opacity-30 transition-colors">▸</button>
       </div>
 
       {showCashflowForm && (
-        <form onSubmit={hsCashflow(onCashflowSubmit)} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-3">{editingCashflowId ? 'Редагувати місяць' : 'Новий запис'}</h3>
+        <form onSubmit={hsCashflow(onCashflowSubmit)} className="glass-card rounded-xl p-4 mb-6">
+          <h3 className="font-semibold text-slate-200 mb-3">{editingCashflowId ? 'Редагувати місяць' : 'Новий запис'}</h3>
           <div className="flex flex-wrap gap-3 items-start">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Місяць</label>
-              <input type="month" {...rCashflow('month')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              {eCashflow.month && <p className="text-red-500 text-xs mt-1">{eCashflow.month.message}</p>}
+              <label className="block text-sm text-slate-300 mb-1">Місяць</label>
+              <input type="month" {...rCashflow('month')} className="glass-input" />
+              {eCashflow.month && <p className="text-red-400 text-xs mt-1">{eCashflow.month.message}</p>}
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Валюта</label>
-              <select {...rCashflow('currency')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <label className="block text-sm text-slate-300 mb-1">Валюта</label>
+              <select {...rCashflow('currency')} className="glass-input">
                 <option value="UAH">UAH</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Доходи</label>
-              <input type="number" step="any" {...rCashflow('income')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+              <label className="block text-sm text-slate-300 mb-1">Доходи</label>
+              <input type="number" step="any" {...rCashflow('income')} className="glass-input w-28" placeholder="0.00" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Витрати</label>
-              <input type="number" step="any" {...rCashflow('expenses')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+              <label className="block text-sm text-slate-300 mb-1">Витрати</label>
+              <input type="number" step="any" {...rCashflow('expenses')} className="glass-input w-28" placeholder="0.00" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Інвестиції</label>
-              <input type="number" step="any" {...rCashflow('investments')} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+              <label className="block text-sm text-slate-300 mb-1">Інвестиції</label>
+              <input type="number" step="any" {...rCashflow('investments')} className="glass-input w-28" placeholder="0.00" />
             </div>
             <div className="flex gap-2 pt-6">
-              <button type="submit" disabled={createCashflow.isPending || updateCashflow.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              <button type="submit" disabled={createCashflow.isPending || updateCashflow.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                 {editingCashflowId ? 'Зберегти' : 'Додати'}
               </button>
-              <button type="button" onClick={() => { setShowCashflowForm(false); setEditingCashflowId(null) }} className="text-gray-500 px-3 py-2 text-sm">Скасувати</button>
+              <button type="button" onClick={() => { setShowCashflowForm(false); setEditingCashflowId(null) }} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">Скасувати</button>
             </div>
           </div>
         </form>
@@ -388,12 +392,12 @@ export default function Budget() {
 
         if (viewMode === 'chart') {
           return (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="glass-card rounded-xl p-5">
               {(() => {
                 const pills = [
-                  { key: 'Доходи',    bg: 'bg-emerald-50', ring: 'ring-[#10B981]', dot: 'bg-[#10B981]', value: totalIncome },
-                  { key: 'Витрати',   bg: 'bg-orange-50',  ring: 'ring-[#F97316]', dot: 'bg-[#F97316]', value: totalExpenses },
-                  { key: 'Інвестиції',bg: 'bg-violet-50',  ring: 'ring-[#8B5CF6]', dot: 'bg-[#8B5CF6]', value: totalInvestments },
+                  { key: 'Доходи',    bg: 'bg-emerald-500/10', ring: 'ring-[#10B981]', dot: 'bg-[#10B981]', value: totalIncome },
+                  { key: 'Витрати',   bg: 'bg-orange-500/10',  ring: 'ring-[#F97316]', dot: 'bg-[#F97316]', value: totalExpenses },
+                  { key: 'Інвестиції',bg: 'bg-violet-500/10',  ring: 'ring-[#8B5CF6]', dot: 'bg-[#8B5CF6]', value: totalInvestments },
                 ]
                 return (
                   <div className="flex flex-wrap gap-3 mb-5">
@@ -403,13 +407,13 @@ export default function Budget() {
                         <button
                           key={p.key}
                           onClick={() => setActiveSeries(s => s === p.key ? null : p.key)}
-                          className={`flex items-center gap-2 ${p.bg} rounded-lg px-3 py-2 transition-all cursor-pointer select-none
+                          className={`flex items-center gap-2 ${p.bg} rounded-lg px-3 py-2 transition-all cursor-pointer select-none border border-white/10
                             ${activeSeries === p.key ? `ring-2 ${p.ring}` : ''}
                             ${!isActive ? 'opacity-35' : 'opacity-100'}`}
                         >
                           <span className={`w-2.5 h-2.5 rounded-full ${p.dot} inline-block`}></span>
-                          <span className="text-xs text-gray-500">{p.key}</span>
-                          <span className="text-sm font-semibold text-gray-800">{formatMoney(p.value, activeCurrency)}</span>
+                          <span className="text-xs text-slate-400">{p.key}</span>
+                          <span className="text-sm font-semibold text-white">{formatMoney(p.value, activeCurrency)}</span>
                         </button>
                       )
                     })}
@@ -418,11 +422,11 @@ export default function Budget() {
               })()}
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis width={60} tick={{ fontSize: 11 }} tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}к`} />
-                  <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} />
-                  <Legend />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis width={60} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}к`} />
+                  <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ color: '#94a3b8' }} />
                   <Bar dataKey="Доходи"     fill="#10B981" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Доходи'     ? 1 : 0.15} />
                   <Bar dataKey="Витрати"    fill="#F97316" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Витрати'    ? 1 : 0.15} />
                   <Bar dataKey="Інвестиції" fill="#8B5CF6" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Інвестиції' ? 1 : 0.15} />
@@ -433,27 +437,27 @@ export default function Budget() {
         }
 
         return (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="glass-card rounded-xl overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white/5 border-b border-white/10">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Місяць</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Доходи</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Витрати</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Дельта</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Інвестиції</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-300">Місяць</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-300">Доходи</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-300">Витрати</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-300">Дельта</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-300">Інвестиції</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-white/[0.06]">
                 {yearRows.map(row => {
                   const delta = row.income - row.expenses
                   const hasData = row.id !== null
                   return (
-                    <tr key={row.monthKey} className={`hover:bg-gray-50 ${!hasData ? 'opacity-40' : ''}`}>
-                      <td className="px-4 py-3 font-medium text-gray-800">
+                    <tr key={row.monthKey} className={`hover:bg-white/5 ${!hasData ? 'opacity-40' : ''}`}>
+                      <td className="px-4 py-3 font-medium text-white">
                         {row.name}
-                        {hasData && <span className="text-gray-400 text-xs ml-1">{row.currency}</span>}
+                        {hasData && <span className="text-slate-500 text-xs ml-1">{row.currency}</span>}
                       </td>
                       <td className="px-4 py-3 text-right text-[#10B981]">
                         {hasData ? formatMoney(row.income, row.currency) : '—'}
@@ -461,7 +465,7 @@ export default function Budget() {
                       <td className="px-4 py-3 text-right text-[#F97316]">
                         {hasData ? formatMoney(row.expenses, row.currency) : '—'}
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium ${!hasData ? 'text-gray-400' : delta > 0 ? 'text-green-600' : delta < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      <td className={`px-4 py-3 text-right font-medium ${!hasData ? 'text-slate-500' : delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                         {hasData ? (delta >= 0 ? '+' : '') + formatMoney(delta, row.currency) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right text-[#8B5CF6]">
@@ -470,30 +474,30 @@ export default function Budget() {
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {hasData ? (
                           <>
-                            <button onClick={() => startEditCashflow(cashflow.find(e => e.id === row.id))} className="text-gray-400 hover:text-blue-600 text-xs px-1">Ред.</button>
-                            <button onClick={() => handleCashflowDelete(row.id)} className="text-gray-400 hover:text-red-600 text-xs px-1">Вид.</button>
+                            <button onClick={() => startEditCashflow(cashflow.find(e => e.id === row.id))} className="text-slate-500 hover:text-blue-400 text-xs px-1 transition-colors">Ред.</button>
+                            <button onClick={() => handleCashflowDelete(row.id)} className="text-slate-500 hover:text-red-400 text-xs px-1 transition-colors">Вид.</button>
                           </>
                         ) : ''}
                       </td>
                     </tr>
                   )
                 })}
-                <tr><td colSpan={6} className="px-0 py-0"><div className="border-t-2 border-dashed border-gray-300 mx-4"></div></td></tr>
-                <tr className="font-semibold bg-gray-50">
-                  <td className="px-4 py-3 text-gray-700">Середнє</td>
+                <tr><td colSpan={6} className="px-0 py-0"><div className="border-t-2 border-dashed border-white/10 mx-4"></div></td></tr>
+                <tr className="font-semibold bg-white/5">
+                  <td className="px-4 py-3 text-slate-300">Середнє</td>
                   <td className="px-4 py-3 text-right text-[#10B981]">{dataRows.length ? formatMoney(avgIncome, activeCurrency) : '—'}</td>
                   <td className="px-4 py-3 text-right text-[#F97316]">{dataRows.length ? formatMoney(avgExpenses, activeCurrency) : '—'}</td>
-                  <td className={`px-4 py-3 text-right ${avgIncome - avgExpenses >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  <td className={`px-4 py-3 text-right ${avgIncome - avgExpenses >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {dataRows.length ? (avgIncome - avgExpenses >= 0 ? '+' : '') + formatMoney(avgIncome - avgExpenses, activeCurrency) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right text-[#8B5CF6]">{dataRows.length ? formatMoney(avgInvestments, activeCurrency) : '—'}</td>
                   <td></td>
                 </tr>
-                <tr className="font-semibold bg-gray-50 border-t border-gray-200">
-                  <td className="px-4 py-3 text-gray-700">Всього</td>
+                <tr className="font-semibold bg-white/5 border-t border-white/10">
+                  <td className="px-4 py-3 text-slate-300">Всього</td>
                   <td className="px-4 py-3 text-right text-[#10B981]">{dataRows.length ? formatMoney(totalIncome, activeCurrency) : '—'}</td>
                   <td className="px-4 py-3 text-right text-[#F97316]">{dataRows.length ? formatMoney(totalExpenses, activeCurrency) : '—'}</td>
-                  <td className={`px-4 py-3 text-right ${totalIncome - totalExpenses >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  <td className={`px-4 py-3 text-right ${totalIncome - totalExpenses >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {dataRows.length ? (totalIncome - totalExpenses >= 0 ? '+' : '') + formatMoney(totalIncome - totalExpenses, activeCurrency) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right text-[#8B5CF6]">{dataRows.length ? formatMoney(totalInvestments, activeCurrency) : '—'}</td>

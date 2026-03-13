@@ -30,7 +30,6 @@ export default function Layout({ children }) {
     navigate('/login', { replace: true })
   }
 
-  // Auto-expand group if current path matches a child
   const isChildActive = (group) =>
     group.children?.some(c => location.pathname === c.to || location.pathname.startsWith(c.to + '/'))
 
@@ -42,7 +41,6 @@ export default function Layout({ children }) {
     return open
   })
 
-  // Keep group open when navigating to its children
   useEffect(() => {
     setExpandedGroups(prev => {
       const next = { ...prev }
@@ -58,15 +56,26 @@ export default function Layout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen flex">
       {/* Global fetch indicator */}
       {isFetching > 0 && (
-        <div className="fixed top-0 left-0 right-0 h-0.5 bg-blue-200 z-50 overflow-hidden">
-          <div className="h-full bg-blue-500 animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: '60%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+        <div className="fixed top-0 left-0 right-0 h-0.5 bg-blue-500/20 z-50 overflow-hidden">
+          <div className="h-full bg-blue-400 animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ width: '60%' }} />
         </div>
       )}
-      <aside className="w-56 bg-white border-r border-gray-200 p-4 flex flex-col shrink-0">
-        <h1 className="text-lg font-bold text-gray-800 mb-4 px-3">Portfolio Tracker</h1>
+
+      {/* Sidebar */}
+      <aside className="w-56 glass-sidebar p-4 flex flex-col shrink-0">
+        {/* Brand */}
+        <div className="px-3 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-400/25 flex items-center justify-center shrink-0">
+              <span className="text-xs">📊</span>
+            </div>
+            <span className="text-sm font-bold text-white">Portfolio</span>
+          </div>
+        </div>
+
         <nav className="flex flex-col gap-0.5 flex-1">
           {NAV.map((item, idx) => {
             if (item.children) {
@@ -78,18 +87,18 @@ export default function Layout({ children }) {
                     onClick={() => toggleGroup(idx)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       active
-                        ? 'text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'text-blue-400'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                     }`}
                   >
                     <span>{item.icon}</span>
                     <span className="flex-1 text-left">{item.label}</span>
-                    <span className={`text-[10px] text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}>
+                    <span className={`text-[10px] text-slate-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>
                       ▶
                     </span>
                   </button>
                   {open && (
-                    <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-gray-200 pl-2">
+                    <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-2">
                       {item.children.map(child => (
                         <NavLink
                           key={child.to}
@@ -97,8 +106,8 @@ export default function Layout({ children }) {
                           className={({ isActive }) =>
                             `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                               isActive
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                                ? 'bg-blue-500/15 text-blue-400 font-medium'
+                                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                             }`
                           }
                         >
@@ -120,8 +129,8 @@ export default function Layout({ children }) {
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-blue-500/15 text-blue-400'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                   }`
                 }
               >
@@ -132,17 +141,20 @@ export default function Layout({ children }) {
           })}
         </nav>
 
-        <div className="mt-auto pt-4 border-t border-gray-100">
-          <p className="text-xs text-gray-400 px-3 mb-2 truncate">{user?.email}</p>
+        {/* User / Sign out */}
+        <div className="mt-auto pt-4 border-t border-white/8">
+          <p className="text-xs text-slate-500 px-3 mb-2 truncate">{user?.email}</p>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-colors"
           >
             <span>→</span>
             Вийти
           </button>
         </div>
       </aside>
+
+      {/* Main content */}
       <main className="flex-1 p-6 overflow-auto">
         {children}
       </main>

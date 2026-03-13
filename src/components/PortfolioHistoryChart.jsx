@@ -15,12 +15,11 @@ export default function PortfolioHistoryChart({ portfolioId }) {
   const [snapshots, setSnapshots] = useState([])
   const [btcRaw, setBtcRaw] = useState([])
   const [period, setPeriod] = useState('all')
-  const [mode, setMode] = useState('value')       // 'value' | 'profit'
+  const [mode, setMode] = useState('value')
   const [showBtc, setShowBtc] = useState(false)
   const [loading, setLoading] = useState(true)
   const [btcLoading, setBtcLoading] = useState(false)
 
-  // Fetch all snapshots once
   useEffect(() => {
     async function load() {
       setLoading(true)
@@ -34,7 +33,6 @@ export default function PortfolioHistoryChart({ portfolioId }) {
     load()
   }, [])
 
-  // Fetch BTC historical when toggled on
   useEffect(() => {
     if (!showBtc || btcRaw.length > 0) return
     async function loadBtc() {
@@ -46,7 +44,6 @@ export default function PortfolioHistoryChart({ portfolioId }) {
     loadBtc()
   }, [showBtc])
 
-  // Extract portfolio history from snapshots
   const allPoints = useMemo(() => {
     return snapshots
       .map(s => {
@@ -68,7 +65,6 @@ export default function PortfolioHistoryChart({ portfolioId }) {
       .filter(Boolean)
   }, [snapshots, portfolioId])
 
-  // Filter by period
   const chartData = useMemo(() => {
     const periodObj = PERIODS.find(p => p.key === period)
     if (!periodObj?.days) return allPoints
@@ -76,13 +72,9 @@ export default function PortfolioHistoryChart({ portfolioId }) {
     return allPoints.filter(p => p.date >= since)
   }, [allPoints, period])
 
-  // Merge BTC data for profit mode comparison
   const mergedData = useMemo(() => {
     if (!showBtc || mode !== 'profit' || !btcRaw.length || !chartData.length) return chartData
-
-    // Normalize BTC to % change from the start of the chart period
     const chartStart = chartData[0].date
-    // Find closest BTC price to chart start
     let btcStartPrice = null
     for (const p of btcRaw) {
       if (p.date >= chartStart - 24 * 60 * 60 * 1000) {
@@ -91,20 +83,14 @@ export default function PortfolioHistoryChart({ portfolioId }) {
       }
     }
     if (!btcStartPrice) btcStartPrice = btcRaw[0]?.price || 1
-
-    // Create a date->btcPercent map (by day)
     const btcByDay = new Map()
     btcRaw.forEach(p => {
       const day = new Date(p.date).toISOString().split('T')[0]
       btcByDay.set(day, ((p.price - btcStartPrice) / btcStartPrice) * 100)
     })
-
     return chartData.map(d => {
       const day = new Date(d.date).toISOString().split('T')[0]
-      return {
-        ...d,
-        btcPercent: btcByDay.get(day) ?? null,
-      }
+      return { ...d, btcPercent: btcByDay.get(day) ?? null }
     })
   }, [chartData, btcRaw, showBtc, mode])
 
@@ -113,18 +99,25 @@ export default function PortfolioHistoryChart({ portfolioId }) {
   const areaColor = mode === 'value' ? '#3B82F6' : '#10B981'
   const gradientId = `histGrad-${portfolioId || 'all'}`
 
+  const tooltipStyle = {
+    background: '#1e293b',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 8,
+    color: '#e2e8f0',
+  }
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+    <div className="glass-card rounded-xl p-5 mb-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h3 className="text-sm font-semibold text-gray-700">Історія портфеля</h3>
+        <h3 className="text-sm font-semibold text-slate-200">Історія портфеля</h3>
         <div className="flex flex-wrap items-center gap-2">
           {/* Mode toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <div className="flex bg-white/8 rounded-lg p-0.5">
             <button
               onClick={() => setMode('value')}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                mode === 'value' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                mode === 'value' ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Капітал ($)
@@ -132,22 +125,22 @@ export default function PortfolioHistoryChart({ portfolioId }) {
             <button
               onClick={() => setMode('profit')}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                mode === 'profit' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                mode === 'profit' ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Прибуток (%)
             </button>
           </div>
 
-          {/* BTC toggle - only in profit mode */}
+          {/* BTC toggle */}
           <button
             onClick={() => mode === 'profit' && setShowBtc(!showBtc)}
             className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
               mode !== 'profit'
-                ? 'border-gray-100 text-gray-300 cursor-not-allowed'
+                ? 'border-white/8 text-slate-600 cursor-not-allowed'
                 : showBtc
-                  ? 'border-orange-300 bg-orange-50 text-orange-700'
-                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                  ? 'border-orange-400/40 bg-orange-500/15 text-orange-400'
+                  : 'border-white/12 text-slate-400 hover:bg-white/5'
             }`}
             title={mode !== 'profit' ? 'Порівняння з BTC доступне лише в режимі Прибуток (%)' : ''}
           >
@@ -155,13 +148,13 @@ export default function PortfolioHistoryChart({ portfolioId }) {
           </button>
 
           {/* Period selector */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <div className="flex bg-white/8 rounded-lg p-0.5">
             {PERIODS.map(p => (
               <button
                 key={p.key}
                 onClick={() => setPeriod(p.key)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  period === p.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  period === p.key ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 {p.label}
@@ -173,11 +166,11 @@ export default function PortfolioHistoryChart({ portfolioId }) {
 
       {/* Chart */}
       {loading || btcLoading ? (
-        <div className="flex items-center justify-center h-[250px] text-gray-400 text-sm">
+        <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm">
           Завантаження...
         </div>
       ) : mergedData.length < 2 ? (
-        <div className="flex items-center justify-center h-[250px] text-gray-400 text-sm">
+        <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm text-center px-4">
           Недостатньо даних для графіка. Дані накопичуються з щоденних снепшотів.
         </div>
       ) : (
@@ -185,14 +178,14 @@ export default function PortfolioHistoryChart({ portfolioId }) {
           <AreaChart data={mergedData}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={areaColor} stopOpacity={0.15} />
+                <stop offset="5%" stopColor={areaColor} stopOpacity={0.20} />
                 <stop offset="95%" stopColor={areaColor} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="dateStr" tick={{ fontSize: 11 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+            <XAxis dataKey="dateStr" tick={{ fontSize: 11, fill: '#94a3b8' }} />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: '#94a3b8' }}
               tickFormatter={mode === 'value' ? (v) => `$${(v / 1000).toFixed(0)}k` : (v) => `${v.toFixed(0)}%`}
             />
             <Tooltip
@@ -201,6 +194,7 @@ export default function PortfolioHistoryChart({ portfolioId }) {
                 name === 'btcPercent' ? 'BTC' : (mode === 'value' ? 'Капітал' : 'Прибуток'),
               ]}
               labelFormatter={(label) => label}
+              contentStyle={tooltipStyle}
             />
             <Area
               type="monotone"
@@ -226,7 +220,7 @@ export default function PortfolioHistoryChart({ portfolioId }) {
 
       {/* Legend for BTC */}
       {showBtc && mode === 'profit' && mergedData.length >= 2 && (
-        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-0.5 bg-green-500 rounded" />
             <span>Портфель</span>

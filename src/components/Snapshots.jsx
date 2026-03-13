@@ -10,7 +10,6 @@ export default function Snapshots() {
   const deleteSnapshot = useDeleteSnapshotMutation()
   const saveSnapshot = useSaveSnapshotMutation()
 
-  // Auto-snapshot once per day
   useEffect(() => {
     async function autoSnapshot() {
       const today = new Date().toISOString().split('T')[0]
@@ -52,15 +51,22 @@ export default function Snapshots() {
       budget: s.data?.budgetTotalUsd || 0,
     }))
 
+  const tooltipStyle = {
+    background: '#1e293b',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 8,
+    color: '#e2e8f0',
+  }
+
   if (isLoading) {
     return (
       <div className="animate-pulse">
         <div className="flex items-center justify-between mb-6">
-          <div className="h-8 bg-gray-200 rounded w-36" />
-          <div className="h-9 bg-gray-200 rounded w-40" />
+          <div className="h-8 bg-white/10 rounded w-36" />
+          <div className="h-9 bg-white/10 rounded w-40" />
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 h-64 mb-6" />
-        <div className="bg-white rounded-xl border border-gray-200 h-48" />
+        <div className="glass-card rounded-xl h-64 mb-6" />
+        <div className="glass-card rounded-xl h-48" />
       </div>
     )
   }
@@ -68,25 +74,25 @@ export default function Snapshots() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Снепшоти</h2>
+        <h2 className="text-2xl font-bold text-white">Снепшоти</h2>
         <button
           onClick={handleSave}
           disabled={saveSnapshot.isPending}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
         >
           {saveSnapshot.isPending ? 'Збереження...' : 'Зберегти снепшот'}
         </button>
       </div>
 
       {chartData.length > 1 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-4">Бюджет з часом</h3>
+        <div className="glass-card rounded-xl p-5 mb-6">
+          <h3 className="font-semibold text-slate-200 mb-4">Бюджет з часом</h3>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => formatMoney(v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+              <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />
               <Line type="monotone" dataKey="budget" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -94,31 +100,31 @@ export default function Snapshots() {
       )}
 
       {snapshots.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-slate-400">
           <p className="text-lg mb-2">Немає снепшотів</p>
           <p className="text-sm">Снепшоти зберігаються автоматично раз на день</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Дата</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Мітка</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Бюджет (USD)</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Позицій</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Дії</th>
+              <tr className="border-b border-white/10 bg-white/5">
+                <th className="text-left py-3 px-4 font-medium text-slate-300">Дата</th>
+                <th className="text-left py-3 px-4 font-medium text-slate-300">Мітка</th>
+                <th className="text-right py-3 px-4 font-medium text-slate-300">Бюджет (USD)</th>
+                <th className="text-right py-3 px-4 font-medium text-slate-300">Позицій</th>
+                <th className="text-right py-3 px-4 font-medium text-slate-300">Дії</th>
               </tr>
             </thead>
             <tbody>
               {snapshots.map(s => (
-                <tr key={s.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-gray-700">{formatDate(s.created_at)}</td>
-                  <td className="py-3 px-4 text-gray-800">{s.label}</td>
-                  <td className="text-right py-3 px-4 text-gray-700">{formatMoney(s.data?.budgetTotalUsd)}</td>
-                  <td className="text-right py-3 px-4 text-gray-700">{s.data?.positions?.length || 0}</td>
+                <tr key={s.id} className="border-b border-white/[0.06] hover:bg-white/5">
+                  <td className="py-3 px-4 text-slate-200">{formatDate(s.created_at)}</td>
+                  <td className="py-3 px-4 text-slate-200">{s.label}</td>
+                  <td className="text-right py-3 px-4 text-slate-200">{formatMoney(s.data?.budgetTotalUsd)}</td>
+                  <td className="text-right py-3 px-4 text-slate-200">{s.data?.positions?.length || 0}</td>
                   <td className="text-right py-3 px-4">
-                    <button onClick={() => handleDelete(s.id)} className="text-red-500 hover:text-red-700 text-xs">
+                    <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-300 text-xs transition-colors">
                       Вид.
                     </button>
                   </td>

@@ -42,29 +42,31 @@ function SortableHeader({ column, children, align = 'left' }) {
   const sorted = column.getIsSorted()
   return (
     <button
-      className={`flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900 ${align === 'right' ? 'ml-auto' : ''}`}
+      className={`flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200 transition-colors ${align === 'right' ? 'ml-auto' : ''}`}
       onClick={() => column.toggleSorting(sorted === 'asc')}
     >
       {children}
-      <span className="text-[10px] text-gray-400">{sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}</span>
+      <span className="text-[10px] text-slate-500">{sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}</span>
     </button>
   )
 }
 
 function TableSkeleton({ cols = 8 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden animate-pulse">
-      <div className="h-10 bg-gray-100 border-b border-gray-200" />
+    <div className="glass-card rounded-xl overflow-hidden animate-pulse">
+      <div className="h-10 bg-white/5 border-b border-white/10" />
       {[1, 2, 3, 4, 5].map(i => (
-        <div key={i} className="flex gap-4 px-4 py-3 border-b border-gray-100">
+        <div key={i} className="flex gap-4 px-4 py-3 border-b border-white/[0.06]">
           {Array.from({ length: cols }).map((_, j) => (
-            <div key={j} className="h-4 bg-gray-100 rounded flex-1" />
+            <div key={j} className="h-4 bg-white/[0.06] rounded flex-1" />
           ))}
         </div>
       ))}
     </div>
   )
 }
+
+const modalTooltipStyle = 'bg-white/5 rounded-lg px-3 py-2 text-lg font-semibold text-white'
 
 export default function TradeHistory() {
   const [tab, setTab] = useState('trades')
@@ -184,25 +186,24 @@ export default function TradeHistory() {
     return true
   }), [adjustments, filterPortfolio])
 
-  // Trades TanStack Table
   const tradesColumns = useMemo(() => [
     {
       id: 'date',
       accessorFn: row => row.date,
       header: ({ column }) => <SortableHeader column={column}>Дата</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{formatDate(getValue())}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{formatDate(getValue())}</span>,
     },
     {
       id: 'portfolio',
       accessorFn: row => row.position?.portfolio?.name || '',
       header: ({ column }) => <SortableHeader column={column}>Портфель</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{getValue() || '—'}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{getValue() || '—'}</span>,
     },
     {
       id: 'ticker',
       accessorFn: row => row.position?.ticker || '',
       header: ({ column }) => <SortableHeader column={column}>Тікер</SortableHeader>,
-      cell: ({ getValue }) => <span className="font-medium text-gray-800">{getValue()}</span>,
+      cell: ({ getValue }) => <span className="font-medium text-white">{getValue()}</span>,
     },
     {
       id: 'type',
@@ -210,11 +211,11 @@ export default function TradeHistory() {
       header: ({ column }) => <SortableHeader column={column}>Тип</SortableHeader>,
       cell: ({ row }) => (
         <div className="flex items-center gap-1.5">
-          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${row.original.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${row.original.type === 'buy' ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
             {row.original.type === 'buy' ? 'Купівля' : 'Продаж'}
           </span>
           {row.original.import_id && (
-            <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
+            <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/15 text-blue-400">
               📥 Імпорт
             </span>
           )}
@@ -225,25 +226,25 @@ export default function TradeHistory() {
       id: 'price',
       accessorFn: row => Number(row.price),
       header: ({ column }) => <SortableHeader column={column} align="right">Ціна</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{formatMoney(getValue())}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{formatMoney(getValue())}</span>,
     },
     {
       id: 'quantity',
       accessorFn: row => Number(row.quantity),
       header: ({ column }) => <SortableHeader column={column} align="right">Кількість</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{getValue()}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{getValue()}</span>,
     },
     {
       id: 'total',
       accessorFn: row => Number(row.price) * Number(row.quantity),
       header: ({ column }) => <SortableHeader column={column} align="right">Сума</SortableHeader>,
-      cell: ({ getValue }) => <span className="font-medium text-gray-800">{formatMoney(getValue())}</span>,
+      cell: ({ getValue }) => <span className="font-medium text-white">{formatMoney(getValue())}</span>,
     },
     {
       id: 'notes',
       accessorFn: row => row.notes || '',
       header: 'Нотатки',
-      cell: ({ getValue }) => <span className="text-gray-500 text-xs truncate max-w-[150px]">{getValue() || '—'}</span>,
+      cell: ({ getValue }) => <span className="text-slate-500 text-xs truncate max-w-[150px]">{getValue() || '—'}</span>,
       enableSorting: false,
     },
     {
@@ -251,8 +252,8 @@ export default function TradeHistory() {
       header: '',
       cell: ({ row }) => (
         <div className="flex gap-2 justify-end whitespace-nowrap">
-          <button onClick={() => openEditTrade(row.original)} className="text-blue-600 hover:text-blue-800 text-xs">Ред.</button>
-          <button onClick={() => handleDeleteTrade(row.original.id)} className="text-red-500 hover:text-red-700 text-xs">Вид.</button>
+          <button onClick={() => openEditTrade(row.original)} className="text-blue-400 hover:text-blue-300 text-xs transition-colors">Ред.</button>
+          <button onClick={() => handleDeleteTrade(row.original.id)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Вид.</button>
         </div>
       ),
       enableSorting: false,
@@ -268,31 +269,30 @@ export default function TradeHistory() {
     getSortedRowModel: getSortedRowModel(),
   })
 
-  // Adjustments TanStack Table
   const adjColumns = useMemo(() => [
     {
       id: 'date',
       accessorFn: row => row.date,
       header: ({ column }) => <SortableHeader column={column}>Дата</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{formatDate(getValue())}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{formatDate(getValue())}</span>,
     },
     {
       id: 'portfolio',
       accessorFn: row => row.portfolio?.name || '',
       header: ({ column }) => <SortableHeader column={column}>Портфель</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{getValue() || '—'}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{getValue() || '—'}</span>,
     },
     {
       id: 'previous',
       accessorFn: row => Number(row.previous_balance),
       header: ({ column }) => <SortableHeader column={column} align="right">Попередній</SortableHeader>,
-      cell: ({ getValue }) => <span className="text-gray-700">{formatMoney(getValue())}</span>,
+      cell: ({ getValue }) => <span className="text-slate-200">{formatMoney(getValue())}</span>,
     },
     {
       id: 'new',
       accessorFn: row => Number(row.new_balance),
       header: ({ column }) => <SortableHeader column={column} align="right">Новий</SortableHeader>,
-      cell: ({ getValue }) => <span className="font-medium text-gray-800">{formatMoney(getValue())}</span>,
+      cell: ({ getValue }) => <span className="font-medium text-white">{formatMoney(getValue())}</span>,
     },
     {
       id: 'diff',
@@ -301,7 +301,7 @@ export default function TradeHistory() {
       cell: ({ getValue }) => {
         const diff = getValue()
         return (
-          <span className={`font-medium ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`font-medium ${diff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {diff >= 0 ? '+' : ''}{formatMoney(diff)}
           </span>
         )
@@ -311,7 +311,7 @@ export default function TradeHistory() {
       id: 'notes',
       accessorFn: row => row.notes || '',
       header: 'Нотатки',
-      cell: ({ getValue }) => <span className="text-gray-500 text-xs truncate max-w-[150px]">{getValue() || '—'}</span>,
+      cell: ({ getValue }) => <span className="text-slate-500 text-xs truncate max-w-[150px]">{getValue() || '—'}</span>,
       enableSorting: false,
     },
     {
@@ -319,8 +319,8 @@ export default function TradeHistory() {
       header: '',
       cell: ({ row }) => (
         <div className="flex gap-2 justify-end whitespace-nowrap">
-          <button onClick={() => openEditAdj(row.original)} className="text-blue-600 hover:text-blue-800 text-xs">Ред.</button>
-          <button onClick={() => handleDeleteAdj(row.original)} className="text-red-500 hover:text-red-700 text-xs">Вид.</button>
+          <button onClick={() => openEditAdj(row.original)} className="text-blue-400 hover:text-blue-300 text-xs transition-colors">Ред.</button>
+          <button onClick={() => handleDeleteAdj(row.original)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Вид.</button>
         </div>
       ),
       enableSorting: false,
@@ -338,18 +338,18 @@ export default function TradeHistory() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Угоди</h2>
+      <h2 className="text-2xl font-bold text-white mb-6">Угоди</h2>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 border-b border-gray-200">
+      <div className="flex gap-1 mb-4 border-b border-white/10">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => { setTab(t.key); setFilterPortfolio(''); setFilterTicker('') }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-400 text-blue-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             {t.label}
@@ -362,7 +362,7 @@ export default function TradeHistory() {
         <select
           value={filterPortfolio}
           onChange={e => setFilterPortfolio(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="glass-input"
         >
           <option value="">Всі портфелі</option>
           {portfolios.map(p => (
@@ -373,7 +373,7 @@ export default function TradeHistory() {
           <select
             value={filterTicker}
             onChange={e => setFilterTicker(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="glass-input"
           >
             <option value="">Всі активи</option>
             {allTickers.map(t => (
@@ -387,13 +387,13 @@ export default function TradeHistory() {
       {tab === 'trades' && (
         isLoading ? <TableSkeleton cols={9} /> :
         filteredTrades.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">Немає угод</p>
+          <p className="text-slate-400 text-center py-8">Немає угод</p>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+          <div className="glass-card rounded-xl overflow-x-auto">
             <table className="w-full text-sm min-w-[800px]">
               <thead>
                 {tradesTable.getHeaderGroups().map(hg => (
-                  <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                  <tr key={hg.id} className="border-b border-white/10 bg-white/5">
                     {hg.headers.map(header => (
                       <th key={header.id} className={`py-3 px-3 ${['price', 'quantity', 'total'].includes(header.id) ? 'text-right' : 'text-left'}`}>
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -404,7 +404,7 @@ export default function TradeHistory() {
               </thead>
               <tbody>
                 {tradesTable.getRowModel().rows.map(row => (
-                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
                     {row.getVisibleCells().map(cell => (
                       <td key={cell.id} className={`py-3 px-3 ${['price', 'quantity', 'total', 'actions'].includes(cell.column.id) ? 'text-right' : ''}`}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -422,13 +422,13 @@ export default function TradeHistory() {
       {tab === 'adjustments' && (
         isLoading ? <TableSkeleton cols={7} /> :
         filteredAdjustments.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">Немає коригувань</p>
+          <p className="text-slate-400 text-center py-8">Немає коригувань</p>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+          <div className="glass-card rounded-xl overflow-x-auto">
             <table className="w-full text-sm min-w-[700px]">
               <thead>
                 {adjTable.getHeaderGroups().map(hg => (
-                  <tr key={hg.id} className="border-b border-gray-200 bg-gray-50">
+                  <tr key={hg.id} className="border-b border-white/10 bg-white/5">
                     {hg.headers.map(header => (
                       <th key={header.id} className={`py-3 px-3 ${['previous', 'new', 'diff'].includes(header.id) ? 'text-right' : 'text-left'}`}>
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -439,7 +439,7 @@ export default function TradeHistory() {
               </thead>
               <tbody>
                 {adjTable.getRowModel().rows.map(row => (
-                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
                     {row.getVisibleCells().map(cell => (
                       <td key={cell.id} className={`py-3 px-3 ${['previous', 'new', 'diff', 'actions'].includes(cell.column.id) ? 'text-right' : ''}`}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -455,45 +455,42 @@ export default function TradeHistory() {
 
       {/* Edit Trade Modal */}
       {editTrade && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={handleSubmitTrade(onUpdateTrade)} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
-            <h3 className="font-semibold text-gray-800 mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <form onSubmit={handleSubmitTrade(onUpdateTrade)} className="glass-modal rounded-xl p-6 w-full max-w-md">
+            <h3 className="font-semibold text-white mb-4">
               Редагувати угоду — {editTrade.position?.ticker}
             </h3>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Тип</label>
-                <select
-                  {...registerTrade('type')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <label className="block text-sm text-slate-300 mb-1">Тип</label>
+                <select {...registerTrade('type')} className="glass-input w-full">
                   <option value="buy">Купівля</option>
                   <option value="sell">Продаж</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Дата</label>
-                <input type="date" {...registerTrade('date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                {tradeErrors.date && <p className="text-red-500 text-xs mt-1">{tradeErrors.date.message}</p>}
+                <label className="block text-sm text-slate-300 mb-1">Дата</label>
+                <input type="date" {...registerTrade('date')} className="glass-input w-full" />
+                {tradeErrors.date && <p className="text-red-400 text-xs mt-1">{tradeErrors.date.message}</p>}
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Ціна</label>
-                <input type="number" step="any" {...registerTrade('price')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                {tradeErrors.price && <p className="text-red-500 text-xs mt-1">{tradeErrors.price.message}</p>}
+                <label className="block text-sm text-slate-300 mb-1">Ціна</label>
+                <input type="number" step="any" {...registerTrade('price')} className="glass-input w-full" />
+                {tradeErrors.price && <p className="text-red-400 text-xs mt-1">{tradeErrors.price.message}</p>}
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Кількість</label>
-                <input type="number" step="any" {...registerTrade('quantity')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                {tradeErrors.quantity && <p className="text-red-500 text-xs mt-1">{tradeErrors.quantity.message}</p>}
+                <label className="block text-sm text-slate-300 mb-1">Кількість</label>
+                <input type="number" step="any" {...registerTrade('quantity')} className="glass-input w-full" />
+                {tradeErrors.quantity && <p className="text-red-400 text-xs mt-1">{tradeErrors.quantity.message}</p>}
               </div>
             </div>
             <div className="mb-4">
-              <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
-              <input type="text" {...registerTrade('notes')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Необов'язково" />
+              <label className="block text-sm text-slate-300 mb-1">Нотатки</label>
+              <input type="text" {...registerTrade('notes')} className="glass-input w-full" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setEditTrade(null)} className="text-gray-500 px-4 py-2 text-sm">Скасувати</button>
-              <button type="submit" disabled={updateTrade.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Зберегти</button>
+              <button type="button" onClick={() => setEditTrade(null)} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">Скасувати</button>
+              <button type="submit" disabled={updateTrade.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">Зберегти</button>
             </div>
           </form>
         </div>
@@ -501,34 +498,34 @@ export default function TradeHistory() {
 
       {/* Edit Adjustment Modal */}
       {editAdj && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={handleSubmitAdj(onUpdateAdj)} className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
-            <h3 className="font-semibold text-gray-800 mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <form onSubmit={handleSubmitAdj(onUpdateAdj)} className="glass-modal rounded-xl p-6 w-full max-w-md">
+            <h3 className="font-semibold text-white mb-4">
               Редагувати коригування — {editAdj.portfolio?.name}
             </h3>
             <div className="mb-3">
-              <label className="block text-sm text-gray-600 mb-1">Дата</label>
-              <input type="date" {...registerAdj('date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              {adjErrors.date && <p className="text-red-500 text-xs mt-1">{adjErrors.date.message}</p>}
+              <label className="block text-sm text-slate-300 mb-1">Дата</label>
+              <input type="date" {...registerAdj('date')} className="glass-input w-full" />
+              {adjErrors.date && <p className="text-red-400 text-xs mt-1">{adjErrors.date.message}</p>}
             </div>
             <div className="mb-3">
-              <label className="block text-sm text-gray-600 mb-1">Попередній баланс</label>
-              <div className="text-lg font-semibold text-gray-800 bg-gray-50 rounded-lg px-3 py-2">
+              <label className="block text-sm text-slate-300 mb-1">Попередній баланс</label>
+              <div className={modalTooltipStyle}>
                 {formatMoney(editAdj.previous_balance)}
               </div>
             </div>
             <div className="mb-3">
-              <label className="block text-sm text-gray-600 mb-1">Новий баланс</label>
-              <input type="number" step="any" {...registerAdj('new_balance')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              {adjErrors.new_balance && <p className="text-red-500 text-xs mt-1">{adjErrors.new_balance.message}</p>}
+              <label className="block text-sm text-slate-300 mb-1">Новий баланс</label>
+              <input type="number" step="any" {...registerAdj('new_balance')} className="glass-input w-full" />
+              {adjErrors.new_balance && <p className="text-red-400 text-xs mt-1">{adjErrors.new_balance.message}</p>}
             </div>
             <div className="mb-4">
-              <label className="block text-sm text-gray-600 mb-1">Нотатки</label>
-              <input type="text" {...registerAdj('notes')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Необов'язково" />
+              <label className="block text-sm text-slate-300 mb-1">Нотатки</label>
+              <input type="text" {...registerAdj('notes')} className="glass-input w-full" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setEditAdj(null)} className="text-gray-500 px-4 py-2 text-sm">Скасувати</button>
-              <button type="submit" disabled={updateAdj.isPending} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Зберегти</button>
+              <button type="button" onClick={() => setEditAdj(null)} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">Скасувати</button>
+              <button type="submit" disabled={updateAdj.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">Зберегти</button>
             </div>
           </form>
         </div>

@@ -25,38 +25,45 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 w-full max-w-sm">
-        <h1 className="text-xl font-bold text-gray-900 mb-6">Portfolio Tracker</h1>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="glass-modal rounded-2xl p-8 w-full max-w-sm">
+        {/* Logo / Title */}
+        <div className="mb-8">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center mb-4">
+            <span className="text-blue-400 text-lg">📊</span>
+          </div>
+          <h1 className="text-xl font-bold text-white">Portfolio Tracker</h1>
+          <p className="text-sm text-slate-400 mt-1">Увійдіть до свого акаунту</p>
+        </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Email</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-300">Email</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
               autoFocus
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="glass-input"
               placeholder="you@example.com"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Пароль</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-300">Пароль</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="glass-input"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -64,7 +71,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+            className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors mt-1"
           >
             {loading ? 'Вхід...' : 'Увійти'}
           </button>

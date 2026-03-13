@@ -37,7 +37,7 @@ export function formatDate(dateStr) {
 }
 
 export function pnlColor(value) {
-  if (value > 0) return 'text-green-600'
-  if (value < 0) return 'text-red-600'
-  return 'text-gray-600'
+  if (value > 0) return 'text-green-400'
+  if (value < 0) return 'text-red-400'
+  return 'text-slate-400'
 }
