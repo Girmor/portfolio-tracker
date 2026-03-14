@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -338,6 +338,18 @@ export default function TradeHistory() {
     getSortedRowModel: getSortedRowModel(),
   })
 
+  useEffect(() => {
+    if (!editTrade && !editAdj) return
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        if (editTrade) setEditTrade(null)
+        if (editAdj) setEditAdj(null)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [editTrade, editAdj])
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-white mb-6">Угоди</h2>
@@ -457,7 +469,8 @@ export default function TradeHistory() {
 
       {/* Edit Trade Modal */}
       {editTrade && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+             onClick={(e) => { if (e.target === e.currentTarget) setEditTrade(null) }}>
           <form onSubmit={handleSubmitTrade(onUpdateTrade)} className="glass-modal rounded-xl p-6 w-full max-w-md">
             <h3 className="font-semibold text-white mb-4">
               Редагувати угоду — {editTrade.position?.ticker}
@@ -500,7 +513,8 @@ export default function TradeHistory() {
 
       {/* Edit Adjustment Modal */}
       {editAdj && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+             onClick={(e) => { if (e.target === e.currentTarget) setEditAdj(null) }}>
           <form onSubmit={handleSubmitAdj(onUpdateAdj)} className="glass-modal rounded-xl p-6 w-full max-w-md">
             <h3 className="font-semibold text-white mb-4">
               Редагувати коригування — {editAdj.portfolio?.name}

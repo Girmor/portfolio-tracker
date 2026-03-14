@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -11,7 +11,7 @@ import {
   flexRender,
 } from '@tanstack/react-table'
 import { formatMoney, formatNumber, formatPercent, pnlColor } from '../lib/formatters'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { searchStocks, searchCrypto } from '../lib/priceService'
 import { ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2, X } from 'lucide-react'
 import {
@@ -360,6 +360,18 @@ export default function PortfolioDetail() {
     getSortedRowModel: getSortedRowModel(),
   })
 
+  useEffect(() => {
+    if (!showAddTrade && !showCashModal) return
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        if (showAddTrade) { setShowAddTrade(null); resetTrade() }
+        if (showCashModal) setShowCashModal(false)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showAddTrade, showCashModal])
+
   if (isLoading) return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -441,14 +453,12 @@ export default function PortfolioDetail() {
             <div className="text-xs text-slate-400 mb-2">Алокація</div>
             <div className="flex items-center justify-center gap-5">
               <div style={{ width: 128, height: 128 }} className="shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={allocationData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} paddingAngle={3} cornerRadius={4} dataKey="value">
-                      {allocationData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <PieChart width={128} height={128}>
+                  <Pie data={allocationData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} paddingAngle={3} cornerRadius={4} dataKey="value">
+                    {allocationData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />
+                </PieChart>
               </div>
               <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
                 {allocationData.map((item, i) => {
@@ -654,7 +664,8 @@ export default function PortfolioDetail() {
 
       {/* Add Trade Modal */}
       {showAddTrade && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+             onClick={(e) => { if (e.target === e.currentTarget) { setShowAddTrade(null); resetTrade() } }}>
           <form onSubmit={handleSubmitTrade(onAddTrade)} className="glass-modal rounded-xl p-6 w-full max-w-md">
             <h3 className="font-semibold text-white mb-4">Нова угода</h3>
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -699,7 +710,8 @@ export default function PortfolioDetail() {
 
       {/* Cash Adjustment Modal */}
       {showCashModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+             onClick={(e) => { if (e.target === e.currentTarget) setShowCashModal(false) }}>
           <form onSubmit={handleSubmitCash(onCashAdjustment)} className="glass-modal rounded-xl p-6 w-full max-w-md">
             <h3 className="font-semibold text-white mb-4">Коригування готівки</h3>
             <div className="mb-3">
