@@ -100,7 +100,6 @@ export default function PortfolioHistoryChart({ portfolioId }) {
   const formatter = mode === 'value'
     ? (v) => (v == null || !isFinite(v)) ? '—' : formatMoney(v)
     : (v) => (v == null || !isFinite(v)) ? '—' : formatPercent(v)
-  const areaColor = mode === 'value' ? '#3B82F6' : '#10B981'
   const gradientId = `histGrad-${portfolioId || 'all'}`
 
   const tooltipStyle = {
@@ -211,6 +210,7 @@ export default function PortfolioHistoryChart({ portfolioId }) {
                 fill={`url(#${gradientId})`}
                 strokeWidth={2}
                 dot={false}
+                isAnimationActive={false}
                 activeDot={{ r: 4, fill: '#60a5fa', stroke: '#1e293b', strokeWidth: 2 }}
               />
               {showBtc && mode === 'profit' && (
@@ -220,6 +220,7 @@ export default function PortfolioHistoryChart({ portfolioId }) {
                   stroke="#f59e0b"
                   strokeWidth={1.5}
                   dot={false}
+                  isAnimationActive={false}
                   strokeDasharray="4 3"
                 />
               )}
