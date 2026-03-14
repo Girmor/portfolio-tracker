@@ -190,7 +190,7 @@ export default function Budget() {
         <h2 className="text-2xl font-bold text-white">Бюджет</h2>
         <button
           onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '' }) }}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="btn btn-primary"
         >
           + Додати рахунок
         </button>
@@ -239,10 +239,10 @@ export default function Budget() {
               {eBudget.amount && <p className="text-red-400 text-xs mt-1">{eBudget.amount.message}</p>}
             </div>
             <div className="flex gap-2 pt-6">
-              <button type="submit" disabled={createBudget.isPending || updateBudget.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={createBudget.isPending || updateBudget.isPending} className="btn btn-primary">
                 {editingId ? 'Зберегти' : 'Додати'}
               </button>
-              <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">Скасувати</button>
+              <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }} className="btn btn-ghost">Скасувати</button>
             </div>
           </div>
         </form>
@@ -320,7 +320,7 @@ export default function Budget() {
           </div>
           <button
             onClick={() => { setShowCashflowForm(true); setEditingCashflowId(null); rsCashflow({ month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' }) }}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="btn btn-primary"
           >
             + Додати місяць
           </button>
@@ -364,10 +364,10 @@ export default function Budget() {
               <input type="number" step="any" {...rCashflow('investments')} className="glass-input w-28" placeholder="0.00" />
             </div>
             <div className="flex gap-2 pt-6">
-              <button type="submit" disabled={createCashflow.isPending || updateCashflow.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={createCashflow.isPending || updateCashflow.isPending} className="btn btn-primary">
                 {editingCashflowId ? 'Зберегти' : 'Додати'}
               </button>
-              <button type="button" onClick={() => { setShowCashflowForm(false); setEditingCashflowId(null) }} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">Скасувати</button>
+              <button type="button" onClick={() => { setShowCashflowForm(false); setEditingCashflowId(null) }} className="btn btn-ghost">Скасувати</button>
             </div>
           </div>
         </form>

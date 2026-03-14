@@ -9,34 +9,95 @@ body {
     linear-gradient(135deg, #0f172a 0%, #1a2744 55%, #0f172a 100%);
   min-height: 100vh;
   background-attachment: fixed;
+  /* Typography base */
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   background: transparent;
 }
 
+/* ─── Typography scale ───────────────────────────────────────────────────── */
+:root {
+  --text-xs:   0.75rem;    /* 12px — labels, badges, meta */
+  --text-sm:   0.875rem;   /* 14px — body, table cells */
+  --text-base: 1rem;       /* 16px — default */
+  --text-lg:   1.125rem;   /* 18px — card titles */
+  --text-xl:   1.25rem;    /* 20px — section headers */
+  --text-2xl:  1.5rem;     /* 24px — page titles */
+
+  --font-tabular: 'SF Mono', ui-monospace, 'Fira Code', monospace;
+}
+
+/* Financial numbers — tabular and consistent width */
+.text-financial {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
 /* ─── Glass utilities ────────────────────────────────────────────────────── */
 .glass-card {
-  background: rgba(255, 255, 255, 0.06);
+  /* Fallback for browsers without backdrop-filter */
+  background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.20);
 }
 
+@supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
 .glass-sidebar {
-  background: rgba(10, 18, 35, 0.65);
+  /* Fallback */
+  background: rgba(8, 14, 28, 0.98);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+}
+
+@supports ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
+  .glass-sidebar {
+    background: rgba(10, 18, 35, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
 }
 
 .glass-modal {
-  background: rgba(10, 18, 35, 0.92);
+  /* Fallback */
+  background: rgba(8, 14, 28, 0.99);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.50);
+}
+
+@supports ((backdrop-filter: blur(24px)) or (-webkit-backdrop-filter: blur(24px))) {
+  .glass-modal {
+    background: rgba(10, 18, 35, 0.92);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+}
+
+/* ─── Focus states (keyboard navigation) ────────────────────────────────── */
+/* Remove default outline, apply custom on keyboard focus only */
+*:focus { outline: none; }
+
+*:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.65);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Inputs get a ring instead of outline */
+.glass-input:focus-visible {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
 }
 
 /* ─── Glass form inputs ──────────────────────────────────────────────────── */
@@ -46,7 +107,7 @@ body {
   color: #e2e8f0;
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.25rem;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   -webkit-appearance: none;
@@ -74,6 +135,66 @@ option {
   background: #1e293b;
   color: #e2e8f0;
 }
+
+/* ─── Button hierarchy ───────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.25rem;
+  transition: background 0.15s, color 0.15s, opacity 0.15s, transform 0.1s;
+  cursor: pointer;
+  white-space: nowrap;
+  border: none;
+}
+.btn:active { transform: scale(0.95); }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Primary — blue fill */
+.btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+.btn-primary:hover:not(:disabled) { background: #3b82f6; }
+
+/* Secondary — subtle glass */
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.11);
+  color: #e2e8f0;
+}
+
+/* Danger — red fill */
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.20);
+}
+.btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+/* Ghost — no bg, text only */
+.btn-ghost {
+  background: transparent;
+  color: #64748b;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.btn-ghost:hover:not(:disabled) { color: #e2e8f0; }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

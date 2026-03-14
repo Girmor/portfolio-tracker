@@ -490,11 +490,11 @@ export default function ImportTrades() {
           )}
 
           <div className="flex gap-3 justify-end">
-            <button onClick={goBack} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">Назад</button>
+            <button onClick={goBack} className="btn btn-ghost">Назад</button>
             <button
               onClick={() => { setImportError(null); handleImport() }}
               disabled={importing || (newTrades.length === 0 && (!parsedData.dividends || parsedData.dividends.length === 0))}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn btn-primary"
             >
               {importing
                 ? 'Імпортується...'

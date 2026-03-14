@@ -473,7 +473,7 @@ export default function PortfolioDetail() {
         <h3 className="text-lg font-semibold text-slate-200">Холдинги</h3>
         <button
           onClick={() => setShowAddPosition(true)}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="btn btn-primary"
         >
           + Додати позицію
         </button>
@@ -528,10 +528,10 @@ export default function PortfolioDetail() {
               )}
               {posForm.name && <div className="text-xs text-green-400 mt-1">Обрано: {posForm.ticker} — {posForm.name}</div>}
             </div>
-            <button type="submit" disabled={addPosition.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={addPosition.isPending} className="btn btn-primary">
               Додати
             </button>
-            <button type="button" onClick={() => setShowAddPosition(false)} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">
+            <button type="button" onClick={() => setShowAddPosition(false)} className="btn btn-ghost">
               Скасувати
             </button>
           </div>
@@ -683,10 +683,10 @@ export default function PortfolioDetail() {
               <input type="text" {...registerTrade('notes')} className="glass-input w-full" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => { setShowAddTrade(null); resetTrade() }} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">
+              <button type="button" onClick={() => { setShowAddTrade(null); resetTrade() }} className="btn btn-ghost">
                 Скасувати
               </button>
-              <button type="submit" disabled={addTrade.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={addTrade.isPending} className="btn btn-primary">
                 Додати угоду
               </button>
             </div>
@@ -716,10 +716,10 @@ export default function PortfolioDetail() {
               {cashErrors.newBalance && <p className="text-red-400 text-xs mt-1">{cashErrors.newBalance.message}</p>}
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setShowCashModal(false)} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">
+              <button type="button" onClick={() => setShowCashModal(false)} className="btn btn-ghost">
                 Скасувати
               </button>
-              <button type="submit" disabled={cashAdjustment.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={cashAdjustment.isPending} className="btn btn-primary">
                 Зберегти
               </button>
             </div>

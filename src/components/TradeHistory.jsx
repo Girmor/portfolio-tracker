@@ -491,8 +491,8 @@ export default function TradeHistory() {
               <input type="text" {...registerTrade('notes')} className="glass-input w-full" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setEditTrade(null)} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">Скасувати</button>
-              <button type="submit" disabled={updateTrade.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">Зберегти</button>
+              <button type="button" onClick={() => setEditTrade(null)} className="btn btn-ghost">Скасувати</button>
+              <button type="submit" disabled={updateTrade.isPending} className="btn btn-primary">Зберегти</button>
             </div>
           </form>
         </div>
@@ -526,8 +526,8 @@ export default function TradeHistory() {
               <input type="text" {...registerAdj('notes')} className="glass-input w-full" placeholder="Необов'язково" />
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setEditAdj(null)} className="text-slate-400 hover:text-slate-200 px-4 py-2 text-sm transition-colors">Скасувати</button>
-              <button type="submit" disabled={updateAdj.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">Зберегти</button>
+              <button type="button" onClick={() => setEditAdj(null)} className="btn btn-ghost">Скасувати</button>
+              <button type="submit" disabled={updateAdj.isPending} className="btn btn-primary">Зберегти</button>
             </div>
           </form>
         </div>

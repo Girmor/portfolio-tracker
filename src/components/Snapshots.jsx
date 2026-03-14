@@ -79,7 +79,7 @@ export default function Snapshots() {
         <button
           onClick={handleSave}
           disabled={saveSnapshot.isPending}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+          className="btn btn-primary"
         >
           {saveSnapshot.isPending ? 'Збереження...' : 'Зберегти снепшот'}
         </button>

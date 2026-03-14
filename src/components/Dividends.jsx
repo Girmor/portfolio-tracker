@@ -194,7 +194,7 @@ export default function Dividends() {
         <h2 className="text-2xl font-bold text-white">Дивіденди та доходи</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="btn btn-primary"
         >
           + Додати дохід
         </button>
@@ -364,10 +364,10 @@ export default function Dividends() {
               />
             </div>
             <div className="flex gap-2 pt-6">
-              <button type="submit" disabled={createDividend.isPending} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={createDividend.isPending} className="btn btn-primary">
                 Додати
               </button>
-              <button type="button" onClick={() => { setShowForm(false); reset() }} className="text-slate-400 hover:text-slate-200 px-3 py-2 text-sm transition-colors">
+              <button type="button" onClick={() => { setShowForm(false); reset() }} className="btn btn-ghost">
                 Скасувати
               </button>
             </div>
