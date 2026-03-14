@@ -53,13 +53,15 @@ export default function PortfolioHistoryChart({ portfolioId }) {
           ? computed.byPortfolio?.[portfolioId]
           : computed.overall
         if (!pf) return null
+        const rawPct = pf.totalPnlPercent
+        const pnlPercent = (rawPct == null || !isFinite(rawPct) || isNaN(rawPct)) ? 0 : rawPct
         return {
           date: new Date(s.created_at).getTime(),
           dateStr: new Date(s.created_at).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' }),
-          value: pf.totalValue,
-          cost: pf.totalCost,
-          pnl: pf.totalPnl,
-          pnlPercent: pf.totalPnlPercent,
+          value: pf.totalValue ?? 0,
+          cost: pf.totalCost ?? 0,
+          pnl: pf.totalPnl ?? 0,
+          pnlPercent,
         }
       })
       .filter(Boolean)
@@ -95,7 +97,9 @@ export default function PortfolioHistoryChart({ portfolioId }) {
   }, [chartData, btcRaw, showBtc, mode])
 
   const dataKey = mode === 'value' ? 'value' : 'pnlPercent'
-  const formatter = mode === 'value' ? (v) => formatMoney(v) : (v) => formatPercent(v)
+  const formatter = mode === 'value'
+    ? (v) => (v == null || !isFinite(v)) ? '—' : formatMoney(v)
+    : (v) => (v == null || !isFinite(v)) ? '—' : formatPercent(v)
   const areaColor = mode === 'value' ? '#3B82F6' : '#10B981'
   const gradientId = `histGrad-${portfolioId || 'all'}`
 
@@ -187,7 +191,10 @@ export default function PortfolioHistoryChart({ portfolioId }) {
               <XAxis dataKey="dateStr" tick={{ fontSize: 11, fill: '#94a3b8' }} />
               <YAxis
                 tick={{ fontSize: 11, fill: '#94a3b8' }}
-                tickFormatter={mode === 'value' ? (v) => `$${(v / 1000).toFixed(0)}k` : (v) => `${v.toFixed(0)}%`}
+                tickFormatter={mode === 'value'
+                  ? (v) => (v == null || !isFinite(v)) ? '' : `$${(v / 1000).toFixed(0)}k`
+                  : (v) => (v == null || !isFinite(v)) ? '' : `${v.toFixed(0)}%`
+                }
               />
               <Tooltip
                 formatter={(v, name) => [
