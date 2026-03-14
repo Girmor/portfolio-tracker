@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, memo } from 'react'
-import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
+import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { getBtcHistoricalPrices } from '../lib/priceService'
 import { formatMoney, formatPercent } from '../lib/formatters'
@@ -19,6 +19,24 @@ function PortfolioHistoryChart({ portfolioId }) {
   const [showBtc, setShowBtc] = useState(false)
   const [loading, setLoading] = useState(true)
   const [btcLoading, setBtcLoading] = useState(false)
+  const [chartWidth, setChartWidth] = useState(0)
+  const roRef = useRef(null)
+
+  // Callback ref: fires when the chart container div mounts (el != null) or
+  // unmounts (el == null). Handles conditional rendering — the div only appears
+  // after data loads, so a plain useEffect([]) would miss it.
+  const containerRef = useCallback((el) => {
+    if (roRef.current) { roRef.current.disconnect(); roRef.current = null }
+    if (!el) return
+    const update = () => {
+      const w = Math.floor(el.getBoundingClientRect().width)
+      if (w > 0) setChartWidth(prev => prev === w ? prev : w)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    roRef.current = ro
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -177,9 +195,9 @@ function PortfolioHistoryChart({ portfolioId }) {
           Недостатньо даних для графіка. Дані накопичуються з щоденних снепшотів.
         </div>
       ) : (
-        <div style={{ height: 250 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={mergedData}>
+        <div ref={containerRef} style={{ height: 250, overflow: 'hidden' }}>
+          {chartWidth > 0 && (
+            <AreaChart width={chartWidth} height={250} data={mergedData}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="rgba(59,130,246,0.35)" />
@@ -225,7 +243,7 @@ function PortfolioHistoryChart({ portfolioId }) {
                 />
               )}
             </AreaChart>
-          </ResponsiveContainer>
+          )}
         </div>
       )}
 

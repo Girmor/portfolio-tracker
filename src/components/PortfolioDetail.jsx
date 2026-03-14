@@ -93,6 +93,7 @@ export default function PortfolioDetail() {
 
   const { data: prices = {} } = usePricesQuery(positions)
 
+
   const addPosition = useAddPositionMutation(id)
   const deletePosition = useDeletePositionMutation(id)
   const addTrade = useAddTradeMutation(id)
@@ -230,27 +231,27 @@ export default function PortfolioDetail() {
     () => positions.map(p => ({ pos: p, calc: calcPosition(p) })),
     [positions, prices] // eslint-disable-line react-hooks/exhaustive-deps
   )
-  const activePositions = posCalcs.filter(({ calc }) => calc.totalQty > 0)
-  const soldPositions = posCalcs.filter(({ calc }) => calc.totalQty <= 0 && (calc.realizedPnl !== 0 || (calc.pos?.trades?.length ?? 0) > 0))
-  const totalInvestmentValue = activePositions.reduce((sum, { calc }) => sum + calc.marketValue, 0)
+  const activePositions = useMemo(() => posCalcs.filter(({ calc }) => calc.totalQty > 0), [posCalcs])
+  const soldPositions = useMemo(() => posCalcs.filter(({ calc }) => calc.totalQty <= 0 && (calc.realizedPnl !== 0 || (calc.pos?.trades?.length ?? 0) > 0)), [posCalcs])
+  const totalInvestmentValue = useMemo(() => activePositions.reduce((sum, { calc }) => sum + calc.marketValue, 0), [activePositions])
   const totalValue = totalInvestmentValue + cashBalance
-  const totalCost = activePositions.reduce((sum, { calc }) => sum + calc.totalCost, 0)
-  const totalUnrealizedPnl = activePositions.reduce((sum, { calc }) => sum + calc.unrealizedPnl, 0)
-  const totalRealizedPnl = posCalcs.reduce((sum, { calc }) => sum + calc.realizedPnl, 0)
+  const totalCost = useMemo(() => activePositions.reduce((sum, { calc }) => sum + calc.totalCost, 0), [activePositions])
+  const totalUnrealizedPnl = useMemo(() => activePositions.reduce((sum, { calc }) => sum + calc.unrealizedPnl, 0), [activePositions])
+  const totalRealizedPnl = useMemo(() => posCalcs.reduce((sum, { calc }) => sum + calc.realizedPnl, 0), [posCalcs])
   const unrealizedPnlPercent = totalCost > 0 ? (totalUnrealizedPnl / totalCost) * 100 : 0
-  const soldTotalRealizedPnl = soldPositions.reduce((sum, { calc }) => sum + calc.realizedPnl, 0)
+  const soldTotalRealizedPnl = useMemo(() => soldPositions.reduce((sum, { calc }) => sum + calc.realizedPnl, 0), [soldPositions])
 
-  const allocationData = activePositions
+  const allocationData = useMemo(() => activePositions
     .map(({ pos, calc }) => ({ name: pos.ticker, value: Math.max(0, calc.marketValue) }))
     .filter(d => d.value > 0)
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => b.value - a.value), [activePositions])
 
-  const bestPerformer = activePositions.reduce((best, item) =>
+  const bestPerformer = useMemo(() => activePositions.reduce((best, item) =>
     !best || item.calc.unrealizedPnlPercent > best.calc.unrealizedPnlPercent ? item : best
-  , null)
-  const worstPerformer = activePositions.reduce((worst, item) =>
+  , null), [activePositions])
+  const worstPerformer = useMemo(() => activePositions.reduce((worst, item) =>
     !worst || item.calc.unrealizedPnlPercent < worst.calc.unrealizedPnlPercent ? item : worst
-  , null)
+  , null), [activePositions])
 
   const holdingsColumns = useMemo(() => [
     {

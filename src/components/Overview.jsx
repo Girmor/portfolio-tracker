@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { Skeleton } from './ui/skeleton'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
 import { usePortfoliosWithPositionsQuery } from '../hooks/usePortfoliosQuery'
@@ -154,26 +154,24 @@ export default function Overview() {
             <div className="text-xs text-slate-400 mb-2">Розподіл капіталу</div>
             <div className="flex items-center justify-center gap-5">
               <div style={{ width: 128, height: 128 }} className="shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={42}
-                      outerRadius={62}
-                      paddingAngle={3}
-                      cornerRadius={4}
-                      dataKey="value"
-                    >
-                      {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v) => formatMoney(v)}
-                      contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <PieChart width={128} height={128}>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={62}
+                    paddingAngle={3}
+                    cornerRadius={4}
+                    dataKey="value"
+                  >
+                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v) => formatMoney(v)}
+                    contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+                  />
+                </PieChart>
               </div>
               <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
                 {pieData.map((item, i) => {

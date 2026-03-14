@@ -206,7 +206,7 @@ export default function Layout({ children }) {
           </div>
         </div>
 
-        <main className="flex-1 p-4 lg:p-6 overflow-auto animate-fadeIn">
+        <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </main>
       </div>

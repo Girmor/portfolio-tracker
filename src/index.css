@@ -49,23 +49,18 @@ body::before {
 
 /* ─── Glass utilities ────────────────────────────────────────────────────── */
 .glass-card {
-  /* Fallback for browsers without backdrop-filter */
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.20);
-  /* Promote to its own GPU compositor layer so backdrop-filter repaints
-     are isolated and don't trigger a full-page composite on React re-renders */
+  /* GPU layer promotion — prevents full-page composite repaint on React re-renders */
   isolation: isolate;
   transform: translateZ(0);
+  will-change: transform;
 }
 
-@supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
-  .glass-card {
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
-}
+/* backdrop-filter removed from glass-card: multiple blurred cards caused
+   main-thread compositing stalls on macOS Safari/Chrome during React re-renders.
+   The sidebar and modal keep their blur — they are single elements. */
 
 .glass-sidebar {
   /* Fallback */
