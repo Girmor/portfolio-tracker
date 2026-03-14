@@ -226,7 +226,10 @@ export default function PortfolioDetail() {
   }
 
   const cashBalance = Number(portfolio?.cash_balance) || 0
-  const posCalcs = positions.map(p => ({ pos: p, calc: calcPosition(p) }))
+  const posCalcs = useMemo(
+    () => positions.map(p => ({ pos: p, calc: calcPosition(p) })),
+    [positions, prices] // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const activePositions = posCalcs.filter(({ calc }) => calc.totalQty > 0)
   const soldPositions = posCalcs.filter(({ calc }) => calc.totalQty <= 0 && (calc.realizedPnl !== 0 || (calc.pos?.trades?.length ?? 0) > 0))
   const totalInvestmentValue = activePositions.reduce((sum, { calc }) => sum + calc.marketValue, 0)

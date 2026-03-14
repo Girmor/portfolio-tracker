@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { getBtcHistoricalPrices } from '../lib/priceService'
@@ -11,7 +11,7 @@ const PERIODS = [
   { key: 'all', label: 'Все', days: null },
 ]
 
-export default function PortfolioHistoryChart({ portfolioId }) {
+function PortfolioHistoryChart({ portfolioId }) {
   const [snapshots, setSnapshots] = useState([])
   const [btcRaw, setBtcRaw] = useState([])
   const [period, setPeriod] = useState('all')
@@ -245,3 +245,5 @@ export default function PortfolioHistoryChart({ portfolioId }) {
     </div>
   )
 }
+
+export default memo(PortfolioHistoryChart)

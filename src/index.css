@@ -3,17 +3,26 @@
 /* ─── Global dark gradient background ───────────────────────────────────── */
 html,
 body {
-  background:
-    radial-gradient(circle at 15% 20%, rgba(120, 119, 198, 0.28), transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(0, 180, 255, 0.16), transparent 38%),
-    linear-gradient(135deg, #0f172a 0%, #1a2744 55%, #0f172a 100%);
   min-height: 100vh;
-  background-attachment: fixed;
+  background: #0f172a;
   /* Typography base */
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fixed background as a separate compositor layer — avoids costly
+   backdrop-filter repaints that background-attachment:fixed caused */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(120, 119, 198, 0.28), transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(0, 180, 255, 0.16), transparent 38%),
+    linear-gradient(135deg, #0f172a 0%, #1a2744 55%, #0f172a 100%);
 }
 
 #root {
@@ -44,6 +53,10 @@ body {
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.20);
+  /* Promote to its own GPU compositor layer so backdrop-filter repaints
+     are isolated and don't trigger a full-page composite on React re-renders */
+  isolation: isolate;
+  transform: translateZ(0);
 }
 
 @supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
