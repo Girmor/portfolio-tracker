@@ -15,6 +15,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts'
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 const MONTHS = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру']
@@ -135,7 +136,7 @@ export default function Dividends() {
       accessorFn: row => row.date,
       header: ({ column }) => (
         <button className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Дата <span className="text-[10px] text-slate-500">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+          Дата {column.getIsSorted() === 'asc' ? <ChevronUp size={12} className="text-slate-500" /> : column.getIsSorted() === 'desc' ? <ChevronDown size={12} className="text-slate-500" /> : <ChevronsUpDown size={12} className="text-slate-500" />}
         </button>
       ),
       cell: ({ getValue }) => <span className="text-slate-200">{formatDate(getValue())}</span>,
@@ -145,7 +146,7 @@ export default function Dividends() {
       accessorFn: row => row.ticker,
       header: ({ column }) => (
         <button className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Тікер <span className="text-[10px] text-slate-500">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+          Тікер {column.getIsSorted() === 'asc' ? <ChevronUp size={12} className="text-slate-500" /> : column.getIsSorted() === 'desc' ? <ChevronDown size={12} className="text-slate-500" /> : <ChevronsUpDown size={12} className="text-slate-500" />}
         </button>
       ),
       cell: ({ getValue }) => <span className="font-medium text-white">{getValue()}</span>,
@@ -155,7 +156,7 @@ export default function Dividends() {
       accessorFn: row => Number(row.amount),
       header: ({ column }) => (
         <button className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200 ml-auto" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Сума <span className="text-[10px] text-slate-500">{column.getIsSorted() === 'asc' ? '▲' : column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>
+          Сума {column.getIsSorted() === 'asc' ? <ChevronUp size={12} className="text-slate-500" /> : column.getIsSorted() === 'desc' ? <ChevronDown size={12} className="text-slate-500" /> : <ChevronsUpDown size={12} className="text-slate-500" />}
         </button>
       ),
       cell: ({ getValue }) => <span className="font-medium text-green-400">{formatMoney(getValue())}</span>,
@@ -204,17 +205,17 @@ export default function Dividends() {
         <button
           onClick={() => setSelectedYear(y => y - 1)}
           disabled={!availableYears.includes(selectedYear - 1) && selectedYear <= Math.min(...availableYears)}
-          className="text-slate-400 hover:text-slate-200 disabled:opacity-30 text-lg px-1 transition-colors"
+          className="text-slate-400 hover:text-slate-200 disabled:opacity-30 px-1 transition-colors"
         >
-          ←
+          <ChevronLeft size={14} />
         </button>
         <span className="text-lg font-semibold text-slate-200 min-w-[60px] text-center">{selectedYear}</span>
         <button
           onClick={() => setSelectedYear(y => y + 1)}
           disabled={selectedYear >= new Date().getFullYear()}
-          className="text-slate-400 hover:text-slate-200 disabled:opacity-30 text-lg px-1 transition-colors"
+          className="text-slate-400 hover:text-slate-200 disabled:opacity-30 px-1 transition-colors"
         >
-          →
+          <ChevronRight size={14} />
         </button>
       </div>
 
@@ -261,29 +262,31 @@ export default function Dividends() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 glass-card rounded-xl p-5">
             <h3 className="text-sm font-semibold text-slate-200 mb-4">Помісячні дивіденди — {selectedYear}</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
-                <Tooltip
-                  formatter={(v) => [formatMoney(v), 'Дивіденди']}
-                  labelFormatter={(label, payload) => {
-                    if (payload?.[0]) {
-                      const idx = MONTHS.indexOf(label)
-                      return idx >= 0 ? MONTHS_FULL[idx] : label
-                    }
-                    return label
-                  }}
-                  contentStyle={tooltipStyle}
-                />
-                <Bar dataKey="amount" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                  {monthlyData.map((entry, i) => (
-                    <Cell key={i} fill={entry.amount > 0 ? '#10B981' : 'rgba(255,255,255,0.08)'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div style={{ height: 200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
+                  <Tooltip
+                    formatter={(v) => [formatMoney(v), 'Дивіденди']}
+                    labelFormatter={(label, payload) => {
+                      if (payload?.[0]) {
+                        const idx = MONTHS.indexOf(label)
+                        return idx >= 0 ? MONTHS_FULL[idx] : label
+                      }
+                      return label
+                    }}
+                    contentStyle={tooltipStyle}
+                  />
+                  <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={48}>
+                    {monthlyData.map((entry, i) => (
+                      <Cell key={i} fill={entry.amount > 0 ? '#10b981' : 'transparent'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           <div className="glass-card rounded-xl p-5">

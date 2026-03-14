@@ -174,48 +174,51 @@ export default function PortfolioHistoryChart({ portfolioId }) {
           Недостатньо даних для графіка. Дані накопичуються з щоденних снепшотів.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={mergedData}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={areaColor} stopOpacity={0.20} />
-                <stop offset="95%" stopColor={areaColor} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-            <XAxis dataKey="dateStr" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-            <YAxis
-              tick={{ fontSize: 11, fill: '#94a3b8' }}
-              tickFormatter={mode === 'value' ? (v) => `$${(v / 1000).toFixed(0)}k` : (v) => `${v.toFixed(0)}%`}
-            />
-            <Tooltip
-              formatter={(v, name) => [
-                name === 'btcPercent' ? formatPercent(v) : formatter(v),
-                name === 'btcPercent' ? 'BTC' : (mode === 'value' ? 'Капітал' : 'Прибуток'),
-              ]}
-              labelFormatter={(label) => label}
-              contentStyle={tooltipStyle}
-            />
-            <Area
-              type="monotone"
-              dataKey={dataKey}
-              stroke={areaColor}
-              fill={`url(#${gradientId})`}
-              strokeWidth={2}
-              dot={false}
-            />
-            {showBtc && mode === 'profit' && (
-              <Line
-                type="monotone"
-                dataKey="btcPercent"
-                stroke="#F59E0B"
-                strokeWidth={1.5}
-                dot={false}
-                strokeDasharray="4 4"
+        <div style={{ height: 250 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={mergedData}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(59,130,246,0.35)" />
+                  <stop offset="100%" stopColor="rgba(59,130,246,0)" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+              <XAxis dataKey="dateStr" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+              <YAxis
+                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                tickFormatter={mode === 'value' ? (v) => `$${(v / 1000).toFixed(0)}k` : (v) => `${v.toFixed(0)}%`}
               />
-            )}
-          </AreaChart>
-        </ResponsiveContainer>
+              <Tooltip
+                formatter={(v, name) => [
+                  name === 'btcPercent' ? formatPercent(v) : formatter(v),
+                  name === 'btcPercent' ? 'BTC' : (mode === 'value' ? 'Капітал' : 'Прибуток'),
+                ]}
+                labelFormatter={(label) => label}
+                contentStyle={tooltipStyle}
+              />
+              <Area
+                type="monotone"
+                dataKey={dataKey}
+                stroke="#60a5fa"
+                fill={`url(#${gradientId})`}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: '#60a5fa', stroke: '#1e293b', strokeWidth: 2 }}
+              />
+              {showBtc && mode === 'profit' && (
+                <Line
+                  type="monotone"
+                  dataKey="btcPercent"
+                  stroke="#f59e0b"
+                  strokeWidth={1.5}
+                  dot={false}
+                  strokeDasharray="4 3"
+                />
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       {/* Legend for BTC */}

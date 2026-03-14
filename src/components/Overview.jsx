@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { Skeleton } from './ui/skeleton'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
 import { usePortfoliosWithPositionsQuery } from '../hooks/usePortfoliosQuery'
 import { useBudgetQuery } from '../hooks/useBudgetQuery'
@@ -10,10 +11,10 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
 
 function StatCardSkeleton() {
   return (
-    <div className="glass-card rounded-xl p-4 animate-pulse">
-      <div className="h-3 bg-white/10 rounded w-1/2 mb-2" />
-      <div className="h-6 bg-white/10 rounded w-3/4 mb-2" />
-      <div className="h-3 bg-white/[0.06] rounded w-1/3" />
+    <div className="glass-card rounded-xl p-4">
+      <Skeleton className="h-3 w-1/2 mb-2" />
+      <Skeleton className="h-6 w-3/4 mb-2" />
+      <Skeleton className="h-3 w-1/3" />
     </div>
   )
 }
@@ -152,15 +153,17 @@ export default function Overview() {
           <div className="glass-card rounded-xl p-4 lg:w-1/3 shrink-0">
             <div className="text-xs text-slate-400 mb-2">Розподіл капіталу</div>
             <div className="flex items-center justify-center gap-5">
-              <div className="w-32 h-32 shrink-0">
+              <div style={{ width: 128, height: 128 }} className="shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={38}
-                      outerRadius={58}
+                      innerRadius={42}
+                      outerRadius={62}
+                      paddingAngle={3}
+                      cornerRadius={4}
                       dataKey="value"
                     >
                       {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -201,22 +204,24 @@ export default function Overview() {
       {barData.length > 0 && (
         <div className="glass-card rounded-xl p-5 mb-6">
           <h3 className="text-sm font-semibold text-slate-200 mb-4">P&L по портфелях</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              <Tooltip
-                formatter={(v) => formatMoney(v)}
-                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
-              />
-              <Bar dataKey="pnl" fill="#3B82F6" radius={[4, 4, 0, 0]}>
-                {barData.map((entry, i) => (
-                  <Cell key={i} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <Tooltip
+                  formatter={(v) => formatMoney(v)}
+                  contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+                />
+                <Bar dataKey="pnl" fill="#3B82F6" radius={[4, 4, 0, 0]}>
+                  {barData.map((entry, i) => (
+                    <Cell key={i} fill={entry.pnl >= 0 ? '#10b981' : '#f87171'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 

@@ -13,6 +13,7 @@ import {
 import { formatMoney, formatNumber, formatPercent, pnlColor } from '../lib/formatters'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { searchStocks, searchCrypto } from '../lib/priceService'
+import { ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2, X } from 'lucide-react'
 import {
   usePortfolioDetailQuery,
   useAddPositionMutation,
@@ -53,9 +54,7 @@ function SortableHeader({ column, children }) {
       onClick={() => column.toggleSorting(sorted === 'asc')}
     >
       {children}
-      <span className="text-[10px] text-slate-500">
-        {sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}
-      </span>
+      {sorted === 'asc' ? <ChevronUp size={12} className="text-slate-500" /> : sorted === 'desc' ? <ChevronDown size={12} className="text-slate-500" /> : <ChevronsUpDown size={12} className="text-slate-500" />}
     </button>
   )
 }
@@ -438,10 +437,10 @@ export default function PortfolioDetail() {
           <div className="glass-card rounded-xl p-4 lg:w-1/3 shrink-0">
             <div className="text-xs text-slate-400 mb-2">Алокація</div>
             <div className="flex items-center justify-center gap-5">
-              <div className="w-32 h-32 shrink-0">
+              <div style={{ width: 128, height: 128 }} className="shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={allocationData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} dataKey="value">
+                    <Pie data={allocationData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} paddingAngle={3} cornerRadius={4} dataKey="value">
                       {allocationData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />

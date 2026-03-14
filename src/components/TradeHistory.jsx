@@ -11,6 +11,8 @@ import {
   flexRender,
 } from '@tanstack/react-table'
 import { formatMoney, formatDate } from '../lib/formatters'
+import { ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react'
+import { Skeleton } from './ui/skeleton'
 import {
   useTradesQuery,
   useUpdateTradeMutation,
@@ -46,19 +48,19 @@ function SortableHeader({ column, children, align = 'left' }) {
       onClick={() => column.toggleSorting(sorted === 'asc')}
     >
       {children}
-      <span className="text-[10px] text-slate-500">{sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}</span>
+      {sorted === 'asc' ? <ChevronUp size={12} className="text-slate-500" /> : sorted === 'desc' ? <ChevronDown size={12} className="text-slate-500" /> : <ChevronsUpDown size={12} className="text-slate-500" />}
     </button>
   )
 }
 
 function TableSkeleton({ cols = 8 }) {
   return (
-    <div className="glass-card rounded-xl overflow-hidden animate-pulse">
+    <div className="glass-card rounded-xl overflow-hidden">
       <div className="h-10 bg-white/5 border-b border-white/10" />
       {[1, 2, 3, 4, 5].map(i => (
         <div key={i} className="flex gap-4 px-4 py-3 border-b border-white/[0.06]">
           {Array.from({ length: cols }).map((_, j) => (
-            <div key={j} className="h-4 bg-white/[0.06] rounded flex-1" />
+            <Skeleton key={j} className="h-4 flex-1" />
           ))}
         </div>
       ))}
@@ -215,8 +217,8 @@ export default function TradeHistory() {
             {row.original.type === 'buy' ? 'Купівля' : 'Продаж'}
           </span>
           {row.original.import_id && (
-            <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/15 text-blue-400">
-              📥 Імпорт
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/15 text-blue-400">
+              <Download size={10} /> Імпорт
             </span>
           )}
         </div>

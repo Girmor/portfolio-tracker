@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { toast } from 'sonner'
 import { formatMoney, formatDate } from '../lib/formatters'
 import { useSnapshotsQuery, useDeleteSnapshotMutation, useSaveSnapshotMutation } from '../hooks/useSnapshotsQuery'
 import { supabase } from '../lib/supabase'
+import { Trash2 } from 'lucide-react'
 
 export default function Snapshots() {
   const { data: snapshots = [], isLoading } = useSnapshotsQuery()
@@ -87,15 +88,30 @@ export default function Snapshots() {
       {chartData.length > 1 && (
         <div className="glass-card rounded-xl p-5 mb-6">
           <h3 className="font-semibold text-slate-200 mb-4">Бюджет з часом</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />
-              <Line type="monotone" dataKey="budget" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <div style={{ height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="snapshotGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(59,130,246,0.35)" />
+                    <stop offset="100%" stopColor="rgba(59,130,246,0)" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />
+                <Area
+                  type="monotone"
+                  dataKey="budget"
+                  stroke="#60a5fa"
+                  fill="url(#snapshotGrad)"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#60a5fa', stroke: '#1e293b', strokeWidth: 1.5 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 

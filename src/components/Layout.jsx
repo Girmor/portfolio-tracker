@@ -2,21 +2,25 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useIsFetching } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  BarChart2, Briefcase, DollarSign, ClipboardList, Download,
+  Wallet, Camera, LogOut, ChevronRight,
+} from 'lucide-react'
 
 const NAV = [
-  { to: '/', label: 'Огляд', icon: '📊' },
+  { to: '/', label: 'Огляд', icon: BarChart2 },
   {
     label: 'Портфелі',
-    icon: '💼',
+    icon: Briefcase,
     children: [
-      { to: '/portfolios', label: 'Портфелі', icon: '💼' },
-      { to: '/dividends', label: 'Дивіденди', icon: '💵' },
-      { to: '/trades', label: 'Угоди', icon: '📋' },
-      { to: '/import', label: 'Імпорт', icon: '📥' },
+      { to: '/portfolios', label: 'Портфелі', icon: Briefcase },
+      { to: '/dividends', label: 'Дивіденди', icon: DollarSign },
+      { to: '/trades', label: 'Угоди', icon: ClipboardList },
+      { to: '/import', label: 'Імпорт', icon: Download },
     ],
   },
-  { to: '/budget', label: 'Бюджет', icon: '💰' },
-  { to: '/snapshots', label: 'Снепшоти', icon: '📸' },
+  { to: '/budget', label: 'Бюджет', icon: Wallet },
+  { to: '/snapshots', label: 'Снепшоти', icon: Camera },
 ]
 
 export default function Layout({ children }) {
@@ -70,7 +74,7 @@ export default function Layout({ children }) {
         <div className="px-3 mb-6">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-400/25 flex items-center justify-center shrink-0">
-              <span className="text-xs">📊</span>
+              <BarChart2 size={14} className="text-blue-400" />
             </div>
             <span className="text-sm font-bold text-white">Portfolio</span>
           </div>
@@ -91,11 +95,9 @@ export default function Layout({ children }) {
                         : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                     }`}
                   >
-                    <span>{item.icon}</span>
+                    <item.icon size={16} />
                     <span className="flex-1 text-left">{item.label}</span>
-                    <span className={`text-[10px] text-slate-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>
-                      ▶
-                    </span>
+                    <ChevronRight size={12} className={`text-slate-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
                   </button>
                   {open && (
                     <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-2">
@@ -111,7 +113,7 @@ export default function Layout({ children }) {
                             }`
                           }
                         >
-                          <span className="text-xs">{child.icon}</span>
+                          <child.icon size={14} />
                           {child.label}
                         </NavLink>
                       ))}
@@ -134,7 +136,7 @@ export default function Layout({ children }) {
                   }`
                 }
               >
-                <span>{item.icon}</span>
+                <item.icon size={16} />
                 {item.label}
               </NavLink>
             )
@@ -148,14 +150,14 @@ export default function Layout({ children }) {
             onClick={handleSignOut}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-colors"
           >
-            <span>→</span>
+            <LogOut size={14} />
             Вийти
           </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-6 overflow-auto animate-fadeIn">
         {children}
       </main>
     </div>

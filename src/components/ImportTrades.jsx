@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { parseIBKRCsv, tradeFingerprint } from '../lib/ibkrParser'
 import { formatMoney, formatDate, formatNumber } from '../lib/formatters'
 import { useImportsQuery, useRefreshImports } from '../hooks/useImportsQuery'
+import { Upload, CheckCircle2, AlertTriangle } from 'lucide-react'
 
 export default function ImportTrades() {
   const [step, setStep] = useState(1)
@@ -243,13 +244,13 @@ export default function ImportTrades() {
               }}
               className="flex items-center gap-1.5 text-sm text-orange-400 border border-orange-400/30 rounded-lg px-3 py-1.5 hover:bg-orange-400/10 transition-colors"
             >
-              🧹 Очистити порожні позиції
+              Очистити порожні позиції
             </button>
             <button
               onClick={() => document.getElementById('import-history')?.scrollIntoView({ behavior: 'smooth' })}
               className="flex items-center gap-1.5 text-sm text-slate-400 border border-white/10 rounded-lg px-3 py-1.5 hover:bg-white/5 transition-colors"
             >
-              🕐 Історія імпортів
+              Історія імпортів
             </button>
           </div>
         )}
@@ -309,7 +310,7 @@ export default function ImportTrades() {
               onClick={() => setStep(3)}
               className="text-left glass-card rounded-xl p-5 transition-all hover:bg-white/[0.10] hover:border-blue-400/40"
             >
-              <div className="text-3xl mb-2">🏦</div>
+              <div className="text-3xl mb-2 text-blue-400 font-bold">IB</div>
               <div className="font-semibold text-white">Interactive Brokers</div>
               <div className="text-sm text-slate-400 mt-1">Імпорт з CSV-звіту IBKR (Activity Statement)</div>
             </button>
@@ -326,7 +327,7 @@ export default function ImportTrades() {
           </div>
           {lastImport && (
             <div className="bg-blue-500/10 border border-blue-400/25 rounded-lg p-3 mb-4 flex items-center gap-2 text-sm">
-              <span className="text-blue-400">ℹ️</span>
+              <span className="text-blue-400">ℹ</span>
               <span className="text-blue-300">
                 Останній імпорт у цей портфель: <strong>{formatDate(lastImport.imported_at)}</strong>
                 {' — '}{lastImport.filename} ({lastImport.trade_count} угод)
@@ -344,7 +345,7 @@ export default function ImportTrades() {
                 : 'border-white/15 hover:border-white/25 hover:bg-white/[0.03]'
             }`}
           >
-            <div className="text-5xl mb-4">📄</div>
+            <div className="flex justify-center mb-4"><Upload size={32} className="text-slate-400" /></div>
             <div className="text-slate-200 font-medium">Перетягніть CSV файл сюди</div>
             <div className="text-sm text-slate-400 mt-1">або натисніть для вибору файлу</div>
             <div className="text-xs text-slate-500 mt-3">Формати, що підтримуються: .csv</div>
@@ -362,7 +363,7 @@ export default function ImportTrades() {
           </div>
           {parsedData.errors.length > 0 && (
             <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-4 mb-4">
-              <div className="font-medium text-yellow-400 mb-2">⚠️ Попередження:</div>
+              <div className="font-medium text-yellow-400 mb-2 flex items-center gap-1"><AlertTriangle size={14} /> Попередження:</div>
               <ul className="text-sm text-yellow-300 list-disc ml-4">
                 {parsedData.errors.map((err, i) => <li key={i}>{err}</li>)}
               </ul>
@@ -420,9 +421,9 @@ export default function ImportTrades() {
                     <tr key={i} className={`border-b border-white/[0.06] ${isDuplicate ? 'bg-yellow-500/5 opacity-60' : 'hover:bg-white/5'}`}>
                       <td className="py-3 px-3">
                         {isDuplicate ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-yellow-400 bg-yellow-500/15 px-2 py-0.5 rounded">⚠️ Дублікат</span>
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-yellow-400 bg-yellow-500/15 px-2 py-0.5 rounded"><AlertTriangle size={10} /> Дублікат</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-400 bg-green-500/15 px-2 py-0.5 rounded">✅ Новий</span>
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-400 bg-green-500/15 px-2 py-0.5 rounded"><CheckCircle2 size={10} /> Новий</span>
                         )}
                       </td>
                       <td className="py-3 px-3 text-slate-200">{formatDate(t.date)}</td>
@@ -446,7 +447,7 @@ export default function ImportTrades() {
           {parsedData.dividends?.length > 0 && (
             <div className="glass-card rounded-xl overflow-x-auto mb-6">
               <div className="px-4 py-3 border-b border-white/10 bg-white/5">
-                <h4 className="text-sm font-semibold text-slate-200">💵 Дивіденди ({parsedData.dividends.length})</h4>
+                <h4 className="text-sm font-semibold text-slate-200">Дивіденди ({parsedData.dividends.length})</h4>
               </div>
               <table className="w-full text-sm">
                 <thead>

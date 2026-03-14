@@ -10,6 +10,7 @@ import Dividends from './components/Dividends'
 import Snapshots from './components/Snapshots'
 import TradeHistory from './components/TradeHistory'
 import ImportTrades from './components/ImportTrades'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -19,7 +20,7 @@ function ProtectedRoute({ children }) {
     </div>
   )
   if (!user) return <Navigate to="/login" replace />
-  return children
+  return <ErrorBoundary>{children}</ErrorBoundary>
 }
 
 function AppRoutes() {
