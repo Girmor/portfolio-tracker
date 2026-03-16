@@ -6,10 +6,13 @@ import { getCoinId } from './priceService'
  */
 export async function fetchCryptoHistory(position, days) {
   const coinId = getCoinId(position)
+  // CoinGecko free tier returns errors for very large day counts on some endpoints.
+  // Use 'max' for anything over a year to get all available daily data.
+  const daysParam = days > 365 ? 'max' : days
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart` +
-      `?vs_currency=usd&days=${days}`
+      `?vs_currency=usd&days=${daysParam}&interval=daily`
     )
     if (!res.ok) return new Map()
     const { prices } = await res.json()
