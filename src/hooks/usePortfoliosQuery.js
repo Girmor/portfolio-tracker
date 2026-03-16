@@ -2,6 +2,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { resolveMissingCoinIds } from '../lib/priceService'
 
+// Overwrites today's auto-snapshot with a fresh recalculation.
+// Fire-and-forget — never surfaces errors to the user.
+async function upsertTodaySnapshot() {
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    await supabase
+      .from('snapshots')
+      .delete()
+      .gte('created_at', today + 'T00:00:00')
+      .lte('created_at', today + 'T23:59:59')
+      .like('label', 'Авто%')
+    await supabase.functions.invoke('recalc-snapshots', {
+      body: { label: `Авто ${today}` },
+    })
+  } catch {
+    // best-effort
+  }
+}
+
 export function usePortfoliosQuery() {
   return useQuery({
     queryKey: ['portfolios'],
@@ -133,6 +152,7 @@ export function useAddTradeMutation(portfolioId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolio', portfolioId] })
       queryClient.invalidateQueries({ queryKey: ['trades'] })
+      upsertTodaySnapshot()
     },
   })
 }
@@ -158,6 +178,7 @@ export function useCashAdjustmentMutation(portfolioId) {
       queryClient.invalidateQueries({ queryKey: ['portfolio', portfolioId] })
       queryClient.invalidateQueries({ queryKey: ['portfolios'] })
       queryClient.invalidateQueries({ queryKey: ['trades'] })
+      upsertTodaySnapshot()
     },
   })
 }

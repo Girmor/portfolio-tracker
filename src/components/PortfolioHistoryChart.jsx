@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { getBtcHistoricalPrices } from '../lib/priceService'
+import { useTradeHistory } from '../hooks/useTradeHistory'
 import { formatMoney, formatPercent } from '../lib/formatters'
 
 const PERIODS = [
@@ -11,20 +12,17 @@ const PERIODS = [
   { key: 'all', label: 'Все', days: null },
 ]
 
-function PortfolioHistoryChart({ portfolioId }) {
+function PortfolioHistoryChart({ portfolioId, positions }) {
   const [snapshots, setSnapshots] = useState([])
+  const [snapLoading, setSnapLoading] = useState(false)
   const [btcRaw, setBtcRaw] = useState([])
   const [period, setPeriod] = useState('all')
   const [mode, setMode] = useState('value')
   const [showBtc, setShowBtc] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [btcLoading, setBtcLoading] = useState(false)
   const [chartWidth, setChartWidth] = useState(0)
   const roRef = useRef(null)
 
-  // Callback ref: fires when the chart container div mounts (el != null) or
-  // unmounts (el == null). Handles conditional rendering — the div only appears
-  // after data loads, so a plain useEffect([]) would miss it.
   const containerRef = useCallback((el) => {
     if (roRef.current) { roRef.current.disconnect(); roRef.current = null }
     if (!el) return
@@ -38,38 +36,30 @@ function PortfolioHistoryChart({ portfolioId }) {
     roRef.current = ro
   }, [])
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      const { data } = await supabase
-        .from('snapshots')
-        .select('created_at, data')
-        .order('created_at', { ascending: true })
-      setSnapshots(data || [])
-      setLoading(false)
-    }
-    load()
-  }, [])
+  // Trade-based history (when positions prop is provided)
+  const { points: tradePoints, loading: tradeLoading } = useTradeHistory(positions || [])
 
+  // Snapshot-based history (legacy fallback — used on Overview or when no positions prop)
   useEffect(() => {
-    if (!showBtc || btcRaw.length > 0) return
-    async function loadBtc() {
-      setBtcLoading(true)
-      const data = await getBtcHistoricalPrices(365)
-      setBtcRaw(data)
-      setBtcLoading(false)
-    }
-    loadBtc()
-  }, [showBtc])
+    if (positions) return
+    setSnapLoading(true)
+    supabase
+      .from('snapshots')
+      .select('created_at, data')
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setSnapshots(data || [])
+        setSnapLoading(false)
+      })
+  }, [positions])
 
-  const allPoints = useMemo(() => {
+  const snapshotPoints = useMemo(() => {
+    if (positions) return []
     return snapshots
       .map(s => {
         const computed = s.data?.computed
         if (!computed) return null
-        const pf = portfolioId
-          ? computed.byPortfolio?.[portfolioId]
-          : computed.overall
+        const pf = portfolioId ? computed.byPortfolio?.[portfolioId] : computed.overall
         if (!pf) return null
         const rawPct = pf.totalPnlPercent
         const pnlPercent = (rawPct == null || !isFinite(rawPct) || isNaN(rawPct)) ? 0 : rawPct
@@ -83,7 +73,22 @@ function PortfolioHistoryChart({ portfolioId }) {
         }
       })
       .filter(Boolean)
-  }, [snapshots, portfolioId])
+  }, [snapshots, portfolioId, positions])
+
+  const allPoints = positions ? tradePoints : snapshotPoints
+  const loading = positions ? tradeLoading : snapLoading
+
+  // BTC comparison overlay
+  useEffect(() => {
+    if (!showBtc || btcRaw.length > 0) return
+    async function loadBtc() {
+      setBtcLoading(true)
+      const data = await getBtcHistoricalPrices(365)
+      setBtcRaw(data)
+      setBtcLoading(false)
+    }
+    loadBtc()
+  }, [showBtc, btcRaw.length])
 
   const chartData = useMemo(() => {
     const periodObj = PERIODS.find(p => p.key === period)
@@ -108,10 +113,10 @@ function PortfolioHistoryChart({ portfolioId }) {
       const day = new Date(p.date).toISOString().split('T')[0]
       btcByDay.set(day, ((p.price - btcStartPrice) / btcStartPrice) * 100)
     })
-    return chartData.map(d => {
-      const day = new Date(d.date).toISOString().split('T')[0]
-      return { ...d, btcPercent: btcByDay.get(day) ?? null }
-    })
+    return chartData.map(d => ({
+      ...d,
+      btcPercent: btcByDay.get(new Date(d.date).toISOString().split('T')[0]) ?? null,
+    }))
   }, [chartData, btcRaw, showBtc, mode])
 
   const dataKey = mode === 'value' ? 'value' : 'pnlPercent'
@@ -126,6 +131,10 @@ function PortfolioHistoryChart({ portfolioId }) {
     borderRadius: 8,
     color: '#e2e8f0',
   }
+
+  const emptyMessage = positions
+    ? 'Недостатньо даних. Додайте угоди щоб побачити графік.'
+    : 'Недостатньо даних для графіка. Дані накопичуються з щоденних снепшотів.'
 
   return (
     <div className="glass-card rounded-xl p-5 mb-6">
@@ -192,7 +201,7 @@ function PortfolioHistoryChart({ portfolioId }) {
         </div>
       ) : mergedData.length < 2 ? (
         <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm text-center px-4">
-          Недостатньо даних для графіка. Дані накопичуються з щоденних снепшотів.
+          {emptyMessage}
         </div>
       ) : (
         <div ref={containerRef} style={{ height: 250, overflow: 'hidden' }}>
@@ -251,11 +260,11 @@ function PortfolioHistoryChart({ portfolioId }) {
       {showBtc && mode === 'profit' && mergedData.length >= 2 && (
         <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-green-500 rounded" />
+            <div className="w-4 h-0.5 bg-blue-400 rounded" />
             <span>Портфель</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-orange-400 rounded" style={{ borderTop: '1px dashed #F59E0B' }} />
+            <div className="w-4 h-0.5 bg-orange-400 rounded" />
             <span>BTC</span>
           </div>
         </div>
