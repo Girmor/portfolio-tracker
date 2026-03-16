@@ -1,6 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
 import { fetchCryptoHistory, fetchStockHistory, fillForward, buildDayRange } from '../lib/historicalPrices'
-import { getCoinId } from '../lib/priceService'
+import { getCoinId, tickerToCoinId } from '../lib/priceService'
+
+// Returns true if we should use CoinGecko regardless of the stored `type` field.
+// Handles cases where crypto was accidentally saved as type='stock'.
+function isCryptoPosition(pos) {
+  if (pos.type === 'crypto') return true
+  if (pos.coin_id) return true
+  // Known crypto tickers in the map
+  const mapped = tickerToCoinId(pos.ticker)
+  return mapped !== pos.ticker.toLowerCase()
+}
 
 /**
  * Builds a daily portfolio value timeline from trade data + historical prices.
@@ -50,7 +60,7 @@ export function useTradeHistory(positions) {
         })
         .map(async pos => {
           let raw
-          if (pos.type === 'crypto') {
+          if (isCryptoPosition(pos)) {
             raw = await fetchCryptoHistory(pos, daysTotal)
           } else {
             raw = await fetchStockHistory(pos.ticker, earliestDate, today)
