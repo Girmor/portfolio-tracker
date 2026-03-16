@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { fetchCryptoHistory, fillForward, buildDayRange } from '../lib/historicalPrices'
+import { fetchCryptoHistory, fetchStockHistory, fillForward, buildDayRange } from '../lib/historicalPrices'
 import { tickerToCoinId } from '../lib/priceService'
 
 // Returns true if we should use CoinGecko for this position.
@@ -11,32 +11,13 @@ function isCryptoPosition(pos) {
   return mapped !== pos.ticker.toLowerCase()
 }
 
-// Builds a synthetic price map for a stock using trade prices + current price.
-// Fills from first trade date with buy price, ending at today's current price.
-function buildStockFallbackMap(trades, currentPrice, allDays) {
-  const sortedTrades = [...trades].sort((a, b) =>
-    (a.date || '').localeCompare(b.date || '')
-  )
-  const raw = new Map()
-  for (const t of sortedTrades) {
-    const d = t.date?.split('T')[0]
-    if (d) raw.set(d, Number(t.price) || 0)
-  }
-  // Add today's current price as the endpoint
-  if (currentPrice) {
-    const today = new Date().toISOString().split('T')[0]
-    raw.set(today, currentPrice)
-  }
-  return fillForward(raw, allDays)
-}
 
 /**
  * Builds a daily portfolio value timeline from trade data + historical prices.
  * @param {Array} positions - positions with trades loaded
- * @param {Object} currentPrices - map of ticker → current price (for stock fallback)
  * Returns { points: Array<{date, dateStr, day, value, cost, pnl, pnlPercent}>, loading: boolean }
  */
-export function useTradeHistory(positions, currentPrices = {}) {
+export function useTradeHistory(positions) {
   const [priceMaps, setPriceMaps] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -83,9 +64,8 @@ export function useTradeHistory(positions, currentPrices = {}) {
             const raw = await fetchCryptoHistory(pos, daysTotal)
             filled = fillForward(raw, allDays)
           } else {
-            // Stocks: Finnhub historical candles require paid plan.
-            // Fall back to a synthetic map: buy price on purchase date → current price today.
-            filled = buildStockFallbackMap(pos.trades || [], currentPrices[pos.ticker], allDays)
+            const raw = await fetchStockHistory(pos.ticker, earliestDate)
+            filled = fillForward(raw, allDays)
           }
           return [pos.ticker, filled]
         })
@@ -106,7 +86,7 @@ export function useTradeHistory(positions, currentPrices = {}) {
 
     fetchAll()
     return () => { cancelled = true }
-  }, [earliestDate, positionsMeta, currentPrices])
+  }, [earliestDate, positionsMeta])
 
   const points = useMemo(() => {
     if (!priceMaps || !earliestDate) return []

@@ -37,7 +37,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   }, [])
 
   // Trade-based history (when positions prop is provided)
-  const { points: tradePoints, loading: tradeLoading } = useTradeHistory(positions || [], currentPrices)
+  const { points: tradePoints, loading: tradeLoading } = useTradeHistory(positions || [])
 
   // Snapshot-based history (legacy fallback — used on Overview or when no positions prop)
   useEffect(() => {

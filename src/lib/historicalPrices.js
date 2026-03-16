@@ -28,26 +28,30 @@ export async function fetchCryptoHistory(position, days) {
 }
 
 /**
- * Fetches historical daily close prices for a stock from Finnhub.
+ * Fetches historical daily close prices for a stock from Yahoo Finance.
  * Returns Map<'YYYY-MM-DD', number>
  */
-export async function fetchStockHistory(ticker, fromDate, toDate) {
-  const key = import.meta.env.VITE_FINNHUB_KEY
-  if (!key) return new Map()
-  const from = Math.floor(new Date(fromDate).getTime() / 1000)
-  const to = Math.floor(new Date(toDate).getTime() / 1000)
+export async function fetchStockHistory(ticker, fromDate) {
+  const daysAgo = Math.ceil((Date.now() - new Date(fromDate)) / (1000 * 60 * 60 * 24))
+  const range = daysAgo > 1825 ? '10y' : daysAgo > 730 ? '5y' : daysAgo > 365 ? '2y' : '1y'
+
   try {
     const res = await fetch(
-      `https://finnhub.io/api/v1/stock/candle` +
-      `?symbol=${encodeURIComponent(ticker)}&resolution=D&from=${from}&to=${to}&token=${key}`
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
+      `?interval=1d&range=${range}`
     )
     if (!res.ok) return new Map()
-    const data = await res.json()
-    if (data.s !== 'ok' || !data.t?.length) return new Map()
+    const json = await res.json()
+    const result = json?.chart?.result?.[0]
+    if (!result) return new Map()
+
+    const timestamps = result.timestamp || []
+    const closes = result.indicators?.quote?.[0]?.close || []
     const map = new Map()
-    for (let i = 0; i < data.t.length; i++) {
-      const day = new Date(data.t[i] * 1000).toISOString().split('T')[0]
-      map.set(day, data.c[i])
+    for (let i = 0; i < timestamps.length; i++) {
+      if (closes[i] == null) continue
+      const day = new Date(timestamps[i] * 1000).toISOString().split('T')[0]
+      map.set(day, closes[i])
     }
     return map
   } catch {
