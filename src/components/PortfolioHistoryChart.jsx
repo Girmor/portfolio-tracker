@@ -119,6 +119,40 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
     }))
   }, [chartData, btcRaw, showBtc, mode])
 
+  // Compute smart X-axis ticks based on visible data range
+  const { xTicks, xFormatter } = useMemo(() => {
+    if (!mergedData.length) return { xTicks: [], xFormatter: (v) => v }
+    const n = mergedData.length
+
+    // Pick tick density based on number of points
+    let stepDays
+    let fmt
+    if (n > 180) {
+      stepDays = 30  // ~monthly
+      fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { month: 'short', year: '2-digit' })
+    } else if (n > 60) {
+      stepDays = 14  // bi-weekly
+      fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' })
+    } else if (n > 14) {
+      stepDays = 7   // weekly
+      fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' })
+    } else {
+      stepDays = 1
+      fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })
+    }
+
+    const MS = stepDays * 24 * 60 * 60 * 1000
+    const ticks = []
+    let lastTick = -Infinity
+    for (const p of mergedData) {
+      if (p.date - lastTick >= MS) {
+        ticks.push(p.date)
+        lastTick = p.date
+      }
+    }
+    return { xTicks: ticks, xFormatter: fmt }
+  }, [mergedData])
+
   const dataKey = mode === 'value' ? 'value' : 'pnlPercent'
   const formatter = mode === 'value'
     ? (v) => (v == null || !isFinite(v)) ? '—' : formatMoney(v)
@@ -214,7 +248,15 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-              <XAxis dataKey="dateStr" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+              <XAxis
+                dataKey="date"
+                type="number"
+                scale="time"
+                domain={['dataMin', 'dataMax']}
+                ticks={xTicks}
+                tickFormatter={xFormatter}
+                tick={{ fontSize: 11, fill: '#94a3b8' }}
+              />
               <YAxis
                 tick={{ fontSize: 11, fill: '#94a3b8' }}
                 tickFormatter={mode === 'value'
@@ -227,7 +269,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                   name === 'btcPercent' ? formatPercent(v) : formatter(v),
                   name === 'btcPercent' ? 'BTC' : (mode === 'value' ? 'Капітал' : 'Прибуток'),
                 ]}
-                labelFormatter={(label) => label}
+                labelFormatter={(ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 contentStyle={tooltipStyle}
               />
               <Area
