@@ -28,30 +28,29 @@ export async function fetchCryptoHistory(position, days) {
 }
 
 /**
- * Fetches historical daily close prices for a stock from Yahoo Finance.
+ * Fetches historical daily adjusted close prices for a stock from Alpha Vantage.
  * Returns Map<'YYYY-MM-DD', number>
  */
 export async function fetchStockHistory(ticker, fromDate) {
-  const daysAgo = Math.ceil((Date.now() - new Date(fromDate)) / (1000 * 60 * 60 * 24))
-  const range = daysAgo > 1825 ? '10y' : daysAgo > 730 ? '5y' : daysAgo > 365 ? '2y' : '1y'
+  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY
+  if (!key) return new Map()
 
   try {
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
-      `?interval=1d&range=${range}`
+      `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY` +
+      `&symbol=${encodeURIComponent(ticker)}&outputsize=full&apikey=${key}`
     )
     if (!res.ok) return new Map()
     const json = await res.json()
-    const result = json?.chart?.result?.[0]
-    if (!result) return new Map()
+    const series = json['Time Series (Daily)']
+    if (!series) return new Map()
 
-    const timestamps = result.timestamp || []
-    const closes = result.indicators?.quote?.[0]?.close || []
+    const from = fromDate ? fromDate.split('T')[0] : null
     const map = new Map()
-    for (let i = 0; i < timestamps.length; i++) {
-      if (closes[i] == null) continue
-      const day = new Date(timestamps[i] * 1000).toISOString().split('T')[0]
-      map.set(day, closes[i])
+    for (const [day, vals] of Object.entries(series)) {
+      if (from && day < from) continue
+      const price = parseFloat(vals['4. close'])
+      if (!isNaN(price)) map.set(day, price)
     }
     return map
   } catch {
