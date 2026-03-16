@@ -196,7 +196,7 @@ export default function Overview() {
       </div>
 
       {/* Overall History Chart */}
-      <PortfolioHistoryChart portfolioId={null} />
+      <PortfolioHistoryChart portfolioId={null} positions={allPositions} currentPrices={prices} />
 
       {/* P&L by portfolios */}
       {barData.length > 0 && (
