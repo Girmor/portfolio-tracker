@@ -12,7 +12,7 @@ const PERIODS = [
   { key: 'all', label: 'Все', days: null },
 ]
 
-function PortfolioHistoryChart({ portfolioId, positions }) {
+function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   const [snapshots, setSnapshots] = useState([])
   const [snapLoading, setSnapLoading] = useState(false)
   const [btcRaw, setBtcRaw] = useState([])
@@ -37,7 +37,7 @@ function PortfolioHistoryChart({ portfolioId, positions }) {
   }, [])
 
   // Trade-based history (when positions prop is provided)
-  const { points: tradePoints, loading: tradeLoading } = useTradeHistory(positions || [])
+  const { points: tradePoints, loading: tradeLoading } = useTradeHistory(positions || [], currentPrices)
 
   // Snapshot-based history (legacy fallback — used on Overview or when no positions prop)
   useEffect(() => {

@@ -480,7 +480,7 @@ export default function PortfolioDetail() {
         )}
       </div>
 
-      <PortfolioHistoryChart portfolioId={id} positions={positions} />
+      <PortfolioHistoryChart portfolioId={id} positions={positions} currentPrices={prices} />
 
       {/* Holdings Header */}
       <div className="flex items-center justify-between mb-4">

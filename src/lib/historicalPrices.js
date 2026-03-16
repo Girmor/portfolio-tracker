@@ -12,7 +12,7 @@ export async function fetchCryptoHistory(position, days) {
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart` +
-      `?vs_currency=usd&days=${daysParam}&interval=daily`
+      `?vs_currency=usd&days=${daysParam}`
     )
     if (!res.ok) return new Map()
     const { prices } = await res.json()
