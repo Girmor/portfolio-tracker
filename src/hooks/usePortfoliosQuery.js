@@ -58,7 +58,8 @@ export function useCreatePortfolioMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (data) => {
-      const { error } = await supabase.from('portfolios').insert(data)
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase.from('portfolios').insert({ ...data, user_id: user.id })
       if (error) throw error
     },
     onSuccess: () => {
