@@ -20,14 +20,15 @@ function cacheSet(key, map) {
  * On success — updates cache. On failure — returns cached data if available.
  * Returns Map<'YYYY-MM-DD', number>
  */
-export async function fetchCryptoHistory(position, days) {
+export async function fetchCryptoHistory(position, _days) {
   const coinId = getCoinId(position)
   const cacheKey = `ph_crypto_${coinId}`
-  const daysParam = days > 365 ? 'max' : days
+  // Always request 'max' — CoinGecko caches this response globally,
+  // which avoids per-user rate limiting that hits unique day counts.
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart` +
-      `?vs_currency=usd&days=${daysParam}`
+      `?vs_currency=usd&days=max`
     )
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const { prices } = await res.json()
