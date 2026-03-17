@@ -50,7 +50,7 @@ function SortableHeader({ column, children }) {
   const sorted = column.getIsSorted()
   return (
     <button
-      className="flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200 transition-colors"
+      className="inline-flex items-center gap-1 font-medium text-slate-400 hover:text-slate-200 transition-colors"
       onClick={() => column.toggleSorting(sorted === 'asc')}
     >
       {children}
