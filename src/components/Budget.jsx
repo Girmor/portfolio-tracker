@@ -102,6 +102,42 @@ export default function Budget() {
     defaultValues: { month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' },
   })
 
+  const [copying, setCopying] = useState(false)
+
+  async function handleCopyFromPrevMonth() {
+    const prevMonth = addMonths(selectedMonth, -1)
+    const prevItems = items.filter(i => i.month === prevMonth)
+    if (!prevItems.length) return
+
+    // Skip items that already exist in selectedMonth (same label + currency + type)
+    const existingKeys = new Set(filteredItems.map(i => `${i.label}|${i.currency}|${i.type}`))
+    const toCreate = prevItems.filter(i => !existingKeys.has(`${i.label}|${i.currency}|${i.type || 'asset'}`))
+
+    if (!toCreate.length) {
+      toast.info('Всі рахунки вже є в цьому місяці')
+      return
+    }
+
+    setCopying(true)
+    try {
+      for (const item of toCreate) {
+        await createBudget.mutateAsync({
+          label: item.label,
+          currency: item.currency,
+          amount: item.amount,
+          type: item.type || 'asset',
+          month: selectedMonth,
+          updated_at: new Date().toISOString(),
+        })
+      }
+      toast.success(`Скопійовано ${toCreate.length} ${toCreate.length === 1 ? 'запис' : 'записів'} з ${monthLabel(prevMonth)}`)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setCopying(false)
+    }
+  }
+
   async function onBudgetSubmit(values) {
     try {
       const payload = { ...values, month: selectedMonth, updated_at: new Date().toISOString() }
@@ -330,21 +366,44 @@ export default function Budget() {
       </div>
 
       {/* Month navigator */}
-      <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
-        <button
-          onClick={() => setSelectedMonth(m => addMonths(m, -1))}
-          className="hover:text-slate-200 px-1 transition-colors"
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <span className="font-medium text-slate-200 w-36 text-center">{monthLabel(selectedMonth)}</span>
-        <button
-          onClick={() => setSelectedMonth(m => addMonths(m, 1))}
-          disabled={selectedMonth >= currentMonth()}
-          className="hover:text-slate-200 px-1 disabled:opacity-30 transition-colors"
-        >
-          <ChevronRight size={14} />
-        </button>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <button
+            onClick={() => setSelectedMonth(m => addMonths(m, -1))}
+            className="hover:text-slate-200 px-1 transition-colors"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <span className="font-medium text-slate-200 w-36 text-center">{monthLabel(selectedMonth)}</span>
+          <button
+            onClick={() => setSelectedMonth(m => addMonths(m, 1))}
+            disabled={selectedMonth >= currentMonth()}
+            className="hover:text-slate-200 px-1 disabled:opacity-30 transition-colors"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+
+        {/* Copy from previous month — shown when prev month has items */}
+        {(() => {
+          const prevMonth = addMonths(selectedMonth, -1)
+          const prevCount = items.filter(i => i.month === prevMonth).length
+          if (!prevCount) return null
+          const existingKeys = new Set(filteredItems.map(i => `${i.label}|${i.currency}|${i.type}`))
+          const newCount = items.filter(i => i.month === prevMonth && !existingKeys.has(`${i.label}|${i.currency}|${i.type || 'asset'}`)).length
+          if (!newCount) return null
+          return (
+            <button
+              onClick={handleCopyFromPrevMonth}
+              disabled={copying}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-white/10 hover:border-white/20 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
+            >
+              <ChevronLeft size={12} />
+              Скопіювати з {monthLabel(prevMonth)}
+              <span className="bg-white/10 rounded px-1.5 py-0.5 text-slate-300">{newCount}</span>
+            </button>
+          )
+        })()}
       </div>
 
       {showForm && (
