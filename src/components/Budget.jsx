@@ -273,7 +273,7 @@ export default function Budget() {
               <BarChart data={monthlyTotals} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                 <Tooltip
                   formatter={(v) => [formatMoney(v), 'USD']}
-                  labelFormatter={(m) => monthLabel(m)}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.month ? monthLabel(payload[0].payload.month) : ''}
                   contentStyle={tooltipStyle}
                 />
                 <Bar dataKey="total" radius={[2, 2, 0, 0]} maxBarSize={16}>
