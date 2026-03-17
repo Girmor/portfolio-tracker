@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
-import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { getBtcHistoricalPrices, getSpxHistoricalPrices } from '../lib/priceService'
 import { useTradeHistory } from '../hooks/useTradeHistory'
 import { formatMoney, formatPercent } from '../lib/formatters'
 
@@ -15,14 +14,8 @@ const PERIODS = [
 function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   const [snapshots, setSnapshots] = useState([])
   const [snapLoading, setSnapLoading] = useState(false)
-  const [btcRaw, setBtcRaw] = useState([])
-  const [spxRaw, setSpxRaw] = useState([])
   const [period, setPeriod] = useState('all')
   const [mode, setMode] = useState('value')
-  const [showBtc, setShowBtc] = useState(false)
-  const [showSpx, setShowSpx] = useState(false)
-  const [btcLoading, setBtcLoading] = useState(false)
-  const [spxLoading, setSpxLoading] = useState(false)
   const [chartWidth, setChartWidth] = useState(0)
   const roRef = useRef(null)
 
@@ -81,30 +74,6 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   const allPoints = positions ? tradePoints : snapshotPoints
   const loading = positions ? tradeLoading : snapLoading
 
-  // BTC comparison overlay
-  useEffect(() => {
-    if (!showBtc || btcRaw.length > 0) return
-    async function loadBtc() {
-      setBtcLoading(true)
-      const data = await getBtcHistoricalPrices()
-      setBtcRaw(data)
-      setBtcLoading(false)
-    }
-    loadBtc()
-  }, [showBtc, btcRaw.length])
-
-  // SPX comparison overlay
-  useEffect(() => {
-    if (!showSpx || spxRaw.length > 0) return
-    async function loadSpx() {
-      setSpxLoading(true)
-      const data = await getSpxHistoricalPrices()
-      setSpxRaw(data)
-      setSpxLoading(false)
-    }
-    loadSpx()
-  }, [showSpx, spxRaw.length])
-
   const chartData = useMemo(() => {
     const periodObj = PERIODS.find(p => p.key === period)
     if (!periodObj?.days) return allPoints
@@ -112,57 +81,21 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
     return allPoints.filter(p => p.date >= since)
   }, [allPoints, period])
 
-  const mergedData = useMemo(() => {
-    if (!chartData.length) return chartData
-    if (mode !== 'profit') return chartData
-
-    function buildPercentMap(raw) {
-      if (!raw.length) return null
-      const chartStart = chartData[0].date
-      let startPrice = null
-      for (const p of raw) {
-        if (p.date >= chartStart - 24 * 60 * 60 * 1000) { startPrice = p.price; break }
-      }
-      if (!startPrice) startPrice = raw[0]?.price || 1
-      const byDay = new Map()
-      raw.forEach(p => {
-        const day = new Date(p.date).toISOString().split('T')[0]
-        byDay.set(day, ((p.price - startPrice) / startPrice) * 100)
-      })
-      return byDay
-    }
-
-    const btcMap = showBtc && btcRaw.length ? buildPercentMap(btcRaw) : null
-    const spxMap = showSpx && spxRaw.length ? buildPercentMap(spxRaw) : null
-
-    if (!btcMap && !spxMap) return chartData
-
-    return chartData.map(d => {
-      const day = new Date(d.date).toISOString().split('T')[0]
-      return {
-        ...d,
-        ...(btcMap ? { btcPercent: btcMap.get(day) ?? null } : {}),
-        ...(spxMap ? { spxPercent: spxMap.get(day) ?? null } : {}),
-      }
-    })
-  }, [chartData, btcRaw, spxRaw, showBtc, showSpx, mode])
-
   // Compute smart X-axis ticks based on visible data range
   const { xTicks, xFormatter } = useMemo(() => {
-    if (!mergedData.length) return { xTicks: [], xFormatter: (v) => v }
-    const n = mergedData.length
+    if (!chartData.length) return { xTicks: [], xFormatter: (v) => v }
+    const n = chartData.length
 
-    // Pick tick density based on number of points
     let stepDays
     let fmt
     if (n > 180) {
-      stepDays = 30  // ~monthly
+      stepDays = 30
       fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { month: 'short', year: '2-digit' })
     } else if (n > 60) {
-      stepDays = 14  // bi-weekly
+      stepDays = 14
       fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' })
     } else if (n > 14) {
-      stepDays = 7   // weekly
+      stepDays = 7
       fmt = (ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' })
     } else {
       stepDays = 1
@@ -172,14 +105,14 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
     const MS = stepDays * 24 * 60 * 60 * 1000
     const ticks = []
     let lastTick = -Infinity
-    for (const p of mergedData) {
+    for (const p of chartData) {
       if (p.date - lastTick >= MS) {
         ticks.push(p.date)
         lastTick = p.date
       }
     }
     return { xTicks: ticks, xFormatter: fmt }
-  }, [mergedData])
+  }, [chartData])
 
   const dataKey = mode === 'value' ? 'value' : 'pnlPercent'
   const formatter = mode === 'value'
@@ -224,34 +157,6 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
             </button>
           </div>
 
-          {/* BTC / SPX toggles */}
-          <button
-            onClick={() => mode === 'profit' && setShowBtc(!showBtc)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
-              mode !== 'profit'
-                ? 'border-white/8 text-slate-600 cursor-not-allowed'
-                : showBtc
-                  ? 'border-orange-400/40 bg-orange-500/15 text-orange-400'
-                  : 'border-white/12 text-slate-400 hover:bg-white/5'
-            }`}
-            title={mode !== 'profit' ? 'Доступно лише в режимі Прибуток (%)' : ''}
-          >
-            vs BTC
-          </button>
-          <button
-            onClick={() => mode === 'profit' && setShowSpx(!showSpx)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
-              mode !== 'profit'
-                ? 'border-white/8 text-slate-600 cursor-not-allowed'
-                : showSpx
-                  ? 'border-green-400/40 bg-green-500/15 text-green-400'
-                  : 'border-white/12 text-slate-400 hover:bg-white/5'
-            }`}
-            title={mode !== 'profit' ? 'Доступно лише в режимі Прибуток (%)' : ''}
-          >
-            vs SPX
-          </button>
-
           {/* Period selector */}
           <div className="flex bg-white/8 rounded-lg p-0.5">
             {PERIODS.map(p => (
@@ -270,18 +175,18 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
       </div>
 
       {/* Chart */}
-      {loading || btcLoading || spxLoading ? (
+      {loading ? (
         <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm">
           Завантаження...
         </div>
-      ) : mergedData.length < 2 ? (
+      ) : chartData.length < 2 ? (
         <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm text-center px-4">
           {emptyMessage}
         </div>
       ) : (
         <div ref={containerRef} style={{ height: 250, overflow: 'hidden' }}>
           {chartWidth > 0 && (
-            <AreaChart width={chartWidth} height={250} data={mergedData}>
+            <AreaChart width={chartWidth} height={250} data={chartData}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="rgba(59,130,246,0.35)" />
@@ -306,11 +211,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                 }
               />
               <Tooltip
-                formatter={(v, name) => {
-                  if (name === 'btcPercent') return [formatPercent(v), 'BTC']
-                  if (name === 'spxPercent') return [formatPercent(v), 'S&P 500']
-                  return [formatter(v), mode === 'value' ? 'Капітал' : 'Прибуток']
-                }}
+                formatter={(v) => [formatter(v), mode === 'value' ? 'Капітал' : 'Прибуток']}
                 labelFormatter={(ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 contentStyle={tooltipStyle}
               />
@@ -324,51 +225,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                 isAnimationActive={false}
                 activeDot={{ r: 4, fill: '#60a5fa', stroke: '#1e293b', strokeWidth: 2 }}
               />
-              {showBtc && mode === 'profit' && (
-                <Line
-                  type="monotone"
-                  dataKey="btcPercent"
-                  stroke="#f59e0b"
-                  strokeWidth={1.5}
-                  dot={false}
-                  isAnimationActive={false}
-                  strokeDasharray="4 3"
-                />
-              )}
-              {showSpx && mode === 'profit' && (
-                <Line
-                  type="monotone"
-                  dataKey="spxPercent"
-                  stroke="#22c55e"
-                  strokeWidth={1.5}
-                  dot={false}
-                  isAnimationActive={false}
-                  strokeDasharray="4 3"
-                />
-              )}
             </AreaChart>
-          )}
-        </div>
-      )}
-
-      {/* Legend */}
-      {mode === 'profit' && (showBtc || showSpx) && mergedData.length >= 2 && (
-        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-blue-400 rounded" />
-            <span>Портфель</span>
-          </div>
-          {showBtc && (
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-0.5 bg-orange-400 rounded" />
-              <span>BTC</span>
-            </div>
-          )}
-          {showSpx && (
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-0.5 bg-green-400 rounded" />
-              <span>S&P 500</span>
-            </div>
           )}
         </div>
       )}
