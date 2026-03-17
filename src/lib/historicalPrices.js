@@ -1,40 +1,35 @@
 import { getCoinId } from './priceService'
 
-const TODAY = new Date().toISOString().split('T')[0]
-
 function cacheGet(key) {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return null
-    const { date, entries } = JSON.parse(raw)
-    if (date !== TODAY) { localStorage.removeItem(key); return null }
+    const { entries } = JSON.parse(raw)
     return new Map(entries)
   } catch { return null }
 }
 
 function cacheSet(key, map) {
   try {
-    localStorage.setItem(key, JSON.stringify({ date: TODAY, entries: [...map] }))
+    localStorage.setItem(key, JSON.stringify({ entries: [...map] }))
   } catch {}
 }
 
 /**
  * Fetches historical daily prices for a crypto position from CoinGecko.
+ * On success — updates cache. On failure — returns cached data if available.
  * Returns Map<'YYYY-MM-DD', number>
  */
 export async function fetchCryptoHistory(position, days) {
   const coinId = getCoinId(position)
   const cacheKey = `ph_crypto_${coinId}`
-  const cached = cacheGet(cacheKey)
-  if (cached) return cached
-
   const daysParam = days > 365 ? 'max' : days
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart` +
       `?vs_currency=usd&days=${daysParam}`
     )
-    if (!res.ok) return new Map()
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const { prices } = await res.json()
     const map = new Map()
     for (const [ts, price] of (prices || [])) {
@@ -44,12 +39,13 @@ export async function fetchCryptoHistory(position, days) {
     if (map.size > 0) cacheSet(cacheKey, map)
     return map
   } catch {
-    return new Map()
+    return cacheGet(cacheKey) ?? new Map()
   }
 }
 
 /**
  * Fetches historical daily adjusted close prices for a stock from Alpha Vantage.
+ * On success — updates cache. On failure — returns cached data if available.
  * Returns Map<'YYYY-MM-DD', number>
  */
 export async function fetchStockHistory(ticker, fromDate) {
@@ -57,18 +53,15 @@ export async function fetchStockHistory(ticker, fromDate) {
   if (!key) return new Map()
 
   const cacheKey = `ph_stock_${ticker}`
-  const cached = cacheGet(cacheKey)
-  if (cached) return cached
-
   try {
     const res = await fetch(
       `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY` +
       `&symbol=${encodeURIComponent(ticker)}&outputsize=full&apikey=${key}`
     )
-    if (!res.ok) return new Map()
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json()
     const series = json['Time Series (Daily)']
-    if (!series) return new Map()
+    if (!series) throw new Error('no series')
 
     const from = fromDate ? fromDate.split('T')[0] : null
     const map = new Map()
@@ -80,7 +73,7 @@ export async function fetchStockHistory(ticker, fromDate) {
     if (map.size > 0) cacheSet(cacheKey, map)
     return map
   } catch {
-    return new Map()
+    return cacheGet(cacheKey) ?? new Map()
   }
 }
 
