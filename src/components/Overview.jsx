@@ -313,26 +313,36 @@ export default function Overview() {
       <PortfolioHistoryChart portfolioId={null} positions={allPositions} currentPrices={prices} budgetItems={budget} />
 
       {/* Portfolio list */}
-      <div className="glass-card rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-slate-200 mb-4">Портфелі</h3>
+      <div className="glass-card rounded-xl p-3">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Портфелі</h3>
+          <Link to="/portfolios" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Всі →</Link>
+        </div>
         {portfolios.length === 0 ? (
-          <p className="text-slate-400 text-sm">
+          <p className="text-slate-500 text-xs px-1">
             Немає портфелів. <Link to="/portfolios" className="text-blue-400 hover:underline">Створити</Link>
           </p>
         ) : (
-          <div className="space-y-1">
-            {portfolios.map(p => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
+            {portfolios.map((p, i) => {
               const val = calcPortfolioValue(p)
               const pnl = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).pnl, 0)
+              const invested = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).invested, 0)
+              const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0
               return (
-                <Link key={p.id} to={`/portfolios/${p.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
-                  <div>
-                    <div className="font-medium text-slate-200">{p.name}</div>
-                    <div className="text-xs text-slate-500">{(p.positions || []).length} позицій</div>
+                <Link
+                  key={p.id}
+                  to={`/portfolios/${p.id}`}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.05] transition-colors"
+                >
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-200 truncate">{p.name}</div>
+                    <div className="text-xs text-slate-500">{(p.positions || []).length} поз.</div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-medium text-white">{formatMoney(val)}</div>
-                    <div className={`text-xs ${pnlColor(pnl)}`}>{formatMoney(pnl)}</div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-medium text-white tabular-nums">{formatMoney(val)}</div>
+                    <div className={`text-xs tabular-nums ${pnlColor(pnl)}`}>{formatMoney(pnl)} {formatPercent(pnlPct)}</div>
                   </div>
                 </Link>
               )
