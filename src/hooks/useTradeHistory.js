@@ -71,7 +71,7 @@ export function useTradeHistory(positions) {
             const raw = await fetchStockHistory(pos.ticker, earliestDate)
             filled = fillForward(raw, allDays)
           }
-          maps.set(pos.ticker, filled)
+          maps.set(pos.ticker, { filled, isCrypto: isCryptoPosition(pos) })
         } catch { /* skip */ }
         // small delay between requests to avoid CoinGecko rate limiting
         if (i < uniquePositions.length - 1) await new Promise(r => setTimeout(r, 600))
@@ -89,8 +89,19 @@ export function useTradeHistory(positions) {
 
     const allDays = buildDayRange(earliestDate)
 
+    // Precompute which tickers have at least one real price in their filled map.
+    // Crypto with no real prices = rate limited (temporary) → skip, don't show fake 0%.
+    // Stocks with no real prices = no API key (permanent) → use cost basis as fallback.
+    const tickersWithRealPrices = new Set()
+    for (const [ticker, { filled }] of priceMaps) {
+      for (const val of filled.values()) {
+        if (val !== null) { tickersWithRealPrices.add(ticker); break }
+      }
+    }
+
     const posTradesSorted = positionsMeta.map(pos => ({
       ticker: pos.ticker,
+      isCrypto: isCryptoPosition(pos),
       trades: [...(pos.trades || [])].sort((a, b) =>
         (a.date || '').localeCompare(b.date || '')
       ),
@@ -100,7 +111,7 @@ export function useTradeHistory(positions) {
       let totalValue = 0
       let totalCost = 0
 
-      for (const { ticker, trades } of posTradesSorted) {
+      for (const { ticker, isCrypto, trades } of posTradesSorted) {
         let totalBuyQty = 0
         let totalBuyCost = 0
         let totalSellQty = 0
@@ -124,10 +135,19 @@ export function useTradeHistory(positions) {
         const avgPrice = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0
         const cost = avgPrice * qty
 
-        const price = priceMaps.get(ticker)?.get(day) ?? null
-        // No market price → fall back to avg cost so the chart starts from the first trade.
-        // This shows a flat cost-basis line for positions without historical price data.
-        const effectivePrice = price !== null ? price : avgPrice
+        const price = priceMaps.get(ticker)?.filled.get(day) ?? null
+
+        let effectivePrice
+        if (price !== null) {
+          effectivePrice = price
+        } else if (!isCrypto && !tickersWithRealPrices.has(ticker)) {
+          // Stock with no historical price API → show cost basis (flat line, 0% return)
+          effectivePrice = avgPrice
+        } else {
+          // Crypto with no data (rate limited) → skip to avoid misleading 0% return
+          continue
+        }
+
         if (effectivePrice <= 0) continue
 
         totalValue += qty * effectivePrice

@@ -199,8 +199,10 @@ function compCacheSet(key, entries) {
 }
 
 export async function getBtcHistoricalPrices() {
-  // Reuse the BTC asset cache already populated by fetchCryptoHistory when
-  // the portfolio contains BTC. Format: { entries: [['YYYY-MM-DD', price], ...] }
+  const cacheKey = 'ph_btc_comparison'
+
+  // Reuse asset cache if BTC is already in the portfolio (populated by fetchCryptoHistory).
+  // Format: { entries: [['YYYY-MM-DD', price], ...] }
   try {
     const raw = localStorage.getItem('ph_crypto_bitcoin')
     if (raw) {
@@ -214,11 +216,28 @@ export async function getBtcHistoricalPrices() {
     }
   } catch {}
 
-  // Fallback: fetch from CoinGecko with stale cache
-  const cacheKey = 'ph_btc_comparison'
+  // Primary: CryptoCompare — no API key needed, much higher rate limits than CoinGecko.
   try {
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=max`
+      'https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsym=USD&limit=2000&aggregate=1'
+    )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+    if (json.Response !== 'Success') throw new Error('no data')
+    const prices = (json.Data?.Data || [])
+      .filter(d => d.close > 0)
+      .map(d => ({ date: d.time * 1000, price: d.close }))
+    if (prices.length > 0) compCacheSet(cacheKey, prices)
+    return prices
+  } catch {}
+
+  // Fallback: stale cache or CoinGecko
+  const cached = compCacheGet(cacheKey)
+  if (cached?.length) return cached
+
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=max'
     )
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
@@ -226,7 +245,7 @@ export async function getBtcHistoricalPrices() {
     if (prices.length > 0) compCacheSet(cacheKey, prices)
     return prices
   } catch {
-    return compCacheGet(cacheKey) ?? []
+    return []
   }
 }
 
