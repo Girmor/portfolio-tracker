@@ -78,9 +78,10 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, bud
   const budgetByMonth = useMemo(() => {
     const map = new Map()
     for (const b of budgetItems) {
-      const usd = b.currency === 'USD' ? Number(b.amount)
-               : b.currency === 'EUR' ? Number(b.amount) * 1.08
-               : Number(b.amount) / 41.5
+      const sign = b.type === 'liability' ? -1 : 1
+      const usd = b.currency === 'USD' ? sign * Number(b.amount)
+               : b.currency === 'EUR' ? sign * Number(b.amount) * 1.08
+               : sign * Number(b.amount) / 41.5
       map.set(b.month, (map.get(b.month) || 0) + usd)
     }
     return map

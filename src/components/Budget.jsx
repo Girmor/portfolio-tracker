@@ -53,6 +53,7 @@ const budgetSchema = z.object({
   label: z.string().min(1, "Назва обов'язкова"),
   currency: z.enum(['UAH', 'USD', 'EUR']),
   amount: z.coerce.number().min(0, 'Сума має бути >= 0'),
+  type: z.enum(['asset', 'liability']),
 })
 
 const cashflowSchema = z.object({
@@ -90,9 +91,9 @@ export default function Budget() {
   const updateCashflow = useUpdateCashflowMutation()
   const deleteCashflow = useDeleteCashflowMutation()
 
-  const { register: rBudget, handleSubmit: hsBudget, reset: rsBudget, formState: { errors: eBudget } } = useForm({
+  const { register: rBudget, handleSubmit: hsBudget, reset: rsBudget, watch: wBudget, setValue: svBudget, formState: { errors: eBudget } } = useForm({
     resolver: zodResolver(budgetSchema),
-    defaultValues: { label: '', currency: 'UAH', amount: '' },
+    defaultValues: { label: '', currency: 'UAH', amount: '', type: 'asset' },
   })
 
   const { register: rCashflow, handleSubmit: hsCashflow, reset: rsCashflow, formState: { errors: eCashflow } } = useForm({
@@ -110,7 +111,7 @@ export default function Budget() {
         await createBudget.mutateAsync(payload)
         toast.success('Рахунок додано')
       }
-      rsBudget({ label: '', currency: 'UAH', amount: '' })
+      rsBudget({ label: '', currency: 'UAH', amount: '', type: 'asset' })
       setShowForm(false)
       setEditingId(null)
     } catch (err) {
@@ -143,7 +144,7 @@ export default function Budget() {
 
   function startEditBudget(item) {
     setEditingId(item.id)
-    rsBudget({ label: item.label, currency: item.currency, amount: String(item.amount) })
+    rsBudget({ label: item.label, currency: item.currency, amount: String(item.amount), type: item.type || 'asset' })
     setShowForm(true)
   }
 
@@ -183,26 +184,38 @@ export default function Budget() {
 
   // Filter budget items to selected month
   const filteredItems = items.filter(i => i.month === selectedMonth)
+  const assets = filteredItems.filter(i => (i.type || 'asset') === 'asset')
+  const liabilities = filteredItems.filter(i => i.type === 'liability')
 
-  const grouped = { UAH: [], USD: [], EUR: [] }
-  filteredItems.forEach(item => {
-    if (!grouped[item.currency]) grouped[item.currency] = []
-    grouped[item.currency].push(item)
-  })
-
-  const totals = {}
-  for (const [cur, list] of Object.entries(grouped)) {
-    totals[cur] = list.reduce((sum, i) => sum + Number(i.amount), 0)
+  function groupByCurrency(list) {
+    const g = { UAH: [], USD: [], EUR: [] }
+    list.forEach(item => { g[item.currency] = [...(g[item.currency] || []), item] })
+    return g
+  }
+  function sumByCurrency(list) {
+    const t = {}
+    list.forEach(i => { t[i.currency] = (t[i.currency] || 0) + Number(i.amount) })
+    return t
+  }
+  function toUsd(t) {
+    return (t.USD || 0) + (t.EUR || 0) * 1.08 + (t.UAH || 0) / 41.5
   }
 
-  const totalUsdForSelectedMonth = (totals.USD || 0) + (totals.EUR || 0) * 1.08 + (totals.UAH || 0) / 41.5
+  const assetGrouped = groupByCurrency(assets)
+  const liabilityGrouped = groupByCurrency(liabilities)
+  const assetTotals = sumByCurrency(assets)
+  const liabilityTotals = sumByCurrency(liabilities)
+  const assetUsd = toUsd(assetTotals)
+  const liabilityUsd = toUsd(liabilityTotals)
+  const totalUsdForSelectedMonth = assetUsd - liabilityUsd
 
-  // Monthly totals for sparkline (all items, not filtered)
+  // Monthly totals for sparkline (all items, not filtered), assets minus liabilities
   const monthlyTotals = useMemo(() => {
     const map = new Map()
     for (const item of items) {
       const acc = map.get(item.month) || { UAH: 0, USD: 0, EUR: 0 }
-      acc[item.currency] = (acc[item.currency] || 0) + Number(item.amount)
+      const sign = item.type === 'liability' ? -1 : 1
+      acc[item.currency] = (acc[item.currency] || 0) + sign * Number(item.amount)
       map.set(item.month, acc)
     }
     return [...map.entries()]
@@ -220,22 +233,39 @@ export default function Budget() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-white">Бюджет</h2>
-        <button
-          onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '' }) }}
-          className="btn btn-primary"
-        >
-          + Додати рахунок
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '', type: 'asset' }) }}
+            className="btn btn-primary"
+          >
+            + Рахунок
+          </button>
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '', type: 'liability' }) }}
+            className="btn btn-ghost border border-red-500/40 text-red-400 hover:bg-red-500/10"
+          >
+            + Зобов'язання
+          </button>
+        </div>
       </div>
 
       {/* Total card with sparkline */}
       <div className="glass-card rounded-xl p-5 mb-4">
         <div className="text-xs text-slate-400 mb-1">Загальний бюджет (в USD)</div>
-        <div className="text-2xl font-bold text-white">{formatMoney(totalUsdForSelectedMonth)}</div>
-        <div className="flex gap-4 mt-1 text-sm text-slate-300">
-          {Object.entries(totals).map(([cur, total]) => (
-            total > 0 && <span key={cur}>{CURRENCY_ICONS[cur]} {formatMoney(total, cur)}</span>
-          ))}
+        <div className={`text-2xl font-bold ${totalUsdForSelectedMonth >= 0 ? 'text-white' : 'text-red-400'}`}>
+          {formatMoney(totalUsdForSelectedMonth)}
+        </div>
+        <div className="flex gap-4 mt-1 text-xs">
+          {assetUsd > 0 && (
+            <span className="text-slate-400">
+              Активи: <span className="text-emerald-400">{formatMoney(assetUsd)}</span>
+            </span>
+          )}
+          {liabilityUsd > 0 && (
+            <span className="text-slate-400">
+              Зобов'язання: <span className="text-red-400">−{formatMoney(liabilityUsd)}</span>
+            </span>
+          )}
         </div>
         {monthlyTotals.length >= 2 && (
           <div className="mt-3" style={{ height: 60 }}>
@@ -277,7 +307,21 @@ export default function Budget() {
 
       {showForm && (
         <form onSubmit={hsBudget(onBudgetSubmit)} className="glass-card rounded-xl p-4 mb-6">
-          <h3 className="font-semibold text-slate-200 mb-1">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-slate-200">
+              {editingId ? 'Редагувати' : (wBudget('type') === 'liability' ? 'Нове зобов\'язання' : 'Новий рахунок')}
+            </h3>
+            <div className="flex bg-white/8 rounded-lg p-0.5">
+              <button type="button"
+                onClick={() => svBudget('type', 'asset')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${wBudget('type') === 'asset' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400 hover:text-slate-200'}`}
+              >Актив</button>
+              <button type="button"
+                onClick={() => svBudget('type', 'liability')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${wBudget('type') === 'liability' ? 'bg-red-500/20 text-red-400' : 'text-slate-400 hover:text-slate-200'}`}
+              >Зобов'язання</button>
+            </div>
+          </div>
           <div className="text-xs text-slate-400 mb-3">Місяць: {monthLabel(selectedMonth)}</div>
           <div className="flex gap-3 items-start">
             <div className="flex-1">
@@ -318,43 +362,90 @@ export default function Budget() {
         </form>
       )}
 
-      {/* Account cards — filtered by selectedMonth */}
-      {Object.entries(grouped).map(([currency, list]) =>
-        list.length > 0 && (
-          <div key={currency} className="mb-5">
-            <h3 className="text-base font-semibold text-slate-200 mb-2">
-              {CURRENCY_ICONS[currency]} {currency}
-              <span className="text-xs font-normal text-slate-400 ml-2">Всього: {formatMoney(totals[currency], currency)}</span>
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
-              {list.map(item => (
-                <div key={item.id} className="glass-card rounded-xl p-3 hover:bg-white/[0.09] transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-sm text-slate-200">{item.label}</div>
-                      <div
-                        className="text-base font-bold text-white mt-0.5 cursor-pointer hover:text-blue-400 transition-colors"
-                        onClick={() => handleUpdateAmount(item)}
-                      >
-                        {formatMoney(item.amount, item.currency)}
+      {/* Assets section */}
+      {assets.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wide">Активи</h3>
+            <span className="text-xs text-slate-500">{formatMoney(assetUsd)}</span>
+          </div>
+          {Object.entries(assetGrouped).map(([currency, list]) =>
+            list.length > 0 && (
+              <div key={currency} className="mb-4">
+                <div className="text-xs text-slate-500 mb-2">
+                  {CURRENCY_ICONS[currency]} {currency} — {formatMoney(assetTotals[currency] || 0, currency)}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                  {list.map(item => (
+                    <div key={item.id} className="glass-card rounded-xl p-3 hover:bg-white/[0.09] transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="text-sm text-slate-200">{item.label}</div>
+                          <div
+                            className="text-base font-bold text-white mt-0.5 cursor-pointer hover:text-blue-400 transition-colors"
+                            onClick={() => handleUpdateAmount(item)}
+                          >
+                            {formatMoney(item.amount, item.currency)}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEditBudget(item)} className="text-slate-500 hover:text-blue-400 text-xs px-1 transition-colors">Ред.</button>
+                          <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 text-xs px-1 transition-colors">Вид.</button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => startEditBudget(item)} className="text-slate-500 hover:text-blue-400 text-xs px-1 transition-colors">Ред.</button>
-                      <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 text-xs px-1 transition-colors">Вид.</button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Liabilities section */}
+      {liabilities.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-red-400 uppercase tracking-wide">Зобов'язання</h3>
+            <span className="text-xs text-slate-500">−{formatMoney(liabilityUsd)}</span>
           </div>
-        )
+          {Object.entries(liabilityGrouped).map(([currency, list]) =>
+            list.length > 0 && (
+              <div key={currency} className="mb-4">
+                <div className="text-xs text-slate-500 mb-2">
+                  {CURRENCY_ICONS[currency]} {currency} — {formatMoney(liabilityTotals[currency] || 0, currency)}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                  {list.map(item => (
+                    <div key={item.id} className="glass-card rounded-xl p-3 border border-red-500/20 hover:bg-red-500/5 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="text-sm text-slate-200">{item.label}</div>
+                          <div
+                            className="text-base font-bold text-red-400 mt-0.5 cursor-pointer hover:text-red-300 transition-colors"
+                            onClick={() => handleUpdateAmount(item)}
+                          >
+                            −{formatMoney(item.amount, item.currency)}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEditBudget(item)} className="text-slate-500 hover:text-blue-400 text-xs px-1 transition-colors">Ред.</button>
+                          <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 text-xs px-1 transition-colors">Вид.</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+        </div>
       )}
 
       {filteredItems.length === 0 && (
         <div className="text-center py-10 text-slate-400">
-          <p className="text-base mb-1">Немає рахунків за {monthLabel(selectedMonth)}</p>
-          <p className="text-sm">Додайте рахунки або перейдіть до іншого місяця</p>
+          <p className="text-base mb-1">Немає записів за {monthLabel(selectedMonth)}</p>
+          <p className="text-sm">Додайте рахунки або зобов'язання</p>
         </div>
       )}
 

@@ -59,10 +59,11 @@ export default function Overview() {
   const currentMonthBudget = budget.filter(b => b.month === currentMonthKey)
 
   const budgetTotal = currentMonthBudget.reduce((sum, b) => {
-    if (b.currency === 'USD') return sum + Number(b.amount)
-    if (b.currency === 'EUR') return sum + Number(b.amount) * 1.08
-    if (b.currency === 'UAH') return sum + Number(b.amount) / 41.5
-    return sum + Number(b.amount)
+    const sign = b.type === 'liability' ? -1 : 1
+    if (b.currency === 'USD') return sum + sign * Number(b.amount)
+    if (b.currency === 'EUR') return sum + sign * Number(b.amount) * 1.08
+    if (b.currency === 'UAH') return sum + sign * Number(b.amount) / 41.5
+    return sum + sign * Number(b.amount)
   }, 0)
 
   const investmentTotal = portfolios.reduce((sum, p) => sum + calcPortfolioValue(p), 0)
