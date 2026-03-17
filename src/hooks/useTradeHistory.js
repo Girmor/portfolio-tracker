@@ -52,13 +52,17 @@ export function useTradeHistory(positions) {
       const allDays = buildDayRange(earliestDate)
 
       const seen = new Set()
-      const fetchPromises = positionsMeta
-        .filter(pos => {
-          if (seen.has(pos.ticker)) return false
-          seen.add(pos.ticker)
-          return true
-        })
-        .map(async pos => {
+      const uniquePositions = positionsMeta.filter(pos => {
+        if (seen.has(pos.ticker)) return false
+        seen.add(pos.ticker)
+        return true
+      })
+
+      const maps = new Map()
+      for (let i = 0; i < uniquePositions.length; i++) {
+        if (cancelled) return
+        const pos = uniquePositions[i]
+        try {
           let filled
           if (isCryptoPosition(pos)) {
             const raw = await fetchCryptoHistory(pos, daysTotal)
@@ -67,18 +71,10 @@ export function useTradeHistory(positions) {
             const raw = await fetchStockHistory(pos.ticker, earliestDate)
             filled = fillForward(raw, allDays)
           }
-          return [pos.ticker, filled]
-        })
-
-      const results = await Promise.allSettled(fetchPromises)
-      if (cancelled) return
-
-      const maps = new Map()
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          const [ticker, filled] = r.value
-          maps.set(ticker, filled)
-        }
+          maps.set(pos.ticker, filled)
+        } catch { /* skip */ }
+        // small delay between requests to avoid CoinGecko rate limiting
+        if (i < uniquePositions.length - 1) await new Promise(r => setTimeout(r, 600))
       }
       setPriceMaps(maps)
       setLoading(false)
