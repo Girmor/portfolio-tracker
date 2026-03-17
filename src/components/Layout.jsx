@@ -20,6 +20,7 @@ const NAV = [
     ],
   },
   { to: '/budget', label: 'Бюджет', icon: Wallet },
+  { to: '/snapshots', label: 'Снепшоти', icon: Camera },
 ]
 
 export default function Layout({ children }) {

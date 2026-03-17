@@ -33,7 +33,9 @@ export function formatPercent(num) {
 
 export function formatDate(dateStr) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('uk-UA')
+  // Use local noon to avoid UTC midnight rolling back 1 day in UTC+2/+3
+  const s = dateStr.split('T')[0]
+  return new Date(s + 'T12:00:00').toLocaleDateString('uk-UA')
 }
 
 export function pnlColor(value) {

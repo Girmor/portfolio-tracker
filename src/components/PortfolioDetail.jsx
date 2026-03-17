@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -85,6 +85,7 @@ export default function PortfolioDetail() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [posForm, setPosForm] = useState({ ticker: '', name: '', type: 'stock', coinId: '' })
+  const searchTimerRef = useRef(null)
   const [holdingsSorting, setHoldingsSorting] = useState([])
 
   const { data, isLoading, error } = usePortfolioDetailQuery(id)
@@ -146,17 +147,17 @@ export default function PortfolioDetail() {
     }
   }
 
-  async function handleTickerInput(value, type) {
+  function handleTickerInput(value, type) {
     setPosForm(f => ({ ...f, ticker: value, name: '' }))
     setShowSuggestions(true)
+    clearTimeout(searchTimerRef.current)
     if (value.length < 1) { setSuggestions([]); return }
-    const timeout = setTimeout(async () => {
+    searchTimerRef.current = setTimeout(async () => {
       setSearchLoading(true)
       const results = type === 'crypto' ? await searchCrypto(value) : await searchStocks(value)
       setSuggestions(results)
       setSearchLoading(false)
     }, 300)
-    return () => clearTimeout(timeout)
   }
 
   function selectSuggestion(item) {

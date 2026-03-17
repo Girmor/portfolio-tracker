@@ -48,7 +48,7 @@ export default function Snapshots() {
   const chartData = [...snapshots]
     .reverse()
     .map(s => ({
-      date: formatDate(s.created_at),
+      date: new Date(s.created_at).getTime(),
       budget: s.data?.budgetTotalUsd || 0,
     }))
 
@@ -98,9 +98,20 @@ export default function Snapshots() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <XAxis
+                  dataKey="date"
+                  type="number"
+                  scale="time"
+                  domain={['dataMin', 'dataMax']}
+                  tickFormatter={(ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })}
+                  tick={{ fontSize: 12, fill: '#94a3b8' }}
+                />
                 <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <Tooltip formatter={(v) => formatMoney(v)} contentStyle={tooltipStyle} />
+                <Tooltip
+                  formatter={(v) => [formatMoney(v), 'Бюджет']}
+                  labelFormatter={(ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  contentStyle={tooltipStyle}
+                />
                 <Area
                   type="monotone"
                   dataKey="budget"
