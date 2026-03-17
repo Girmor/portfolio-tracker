@@ -26,7 +26,7 @@ export default function Overview() {
   const allPositions = portfolios.flatMap(p => p.positions || [])
   const { data: prices = {}, isLoading: pricesLoading } = usePricesQuery(allPositions)
 
-  const loading = portfoliosLoading || budgetLoading
+  const loading = portfoliosLoading || budgetLoading || pricesLoading
 
   // AVCO model — consistent with PortfolioDetail
   function calcPositionValue(pos) {
