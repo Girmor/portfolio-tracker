@@ -125,9 +125,12 @@ export function useTradeHistory(positions) {
         const cost = avgPrice * qty
 
         const price = priceMaps.get(ticker)?.get(day) ?? null
-        if (price === null) continue
+        // No market price → fall back to avg cost so the chart starts from the first trade.
+        // This shows a flat cost-basis line for positions without historical price data.
+        const effectivePrice = price !== null ? price : avgPrice
+        if (effectivePrice <= 0) continue
 
-        totalValue += qty * price
+        totalValue += qty * effectivePrice
         totalCost += cost
       }
 
