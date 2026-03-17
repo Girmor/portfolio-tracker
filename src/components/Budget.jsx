@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { formatMoney } from '../lib/formatters'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   useBudgetQuery,
@@ -210,21 +210,26 @@ export default function Budget() {
   const liabilityUsd = toUsd(liabilityTotals)
   const totalUsdForSelectedMonth = assetUsd - liabilityUsd
 
-  // Monthly totals for sparkline (all items, not filtered), assets minus liabilities
+  // Monthly totals for history chart (all items, not filtered)
   const monthlyTotals = useMemo(() => {
     const map = new Map()
     for (const item of items) {
-      const acc = map.get(item.month) || { UAH: 0, USD: 0, EUR: 0 }
-      const sign = item.type === 'liability' ? -1 : 1
-      acc[item.currency] = (acc[item.currency] || 0) + sign * Number(item.amount)
-      map.set(item.month, acc)
+      const prev = map.get(item.month) || { assets: 0, liabilities: 0 }
+      const usd = item.currency === 'USD' ? Number(item.amount)
+               : item.currency === 'EUR' ? Number(item.amount) * 1.08
+               : Number(item.amount) / 41.5
+      if (item.type === 'liability') prev.liabilities += usd
+      else prev.assets += usd
+      map.set(item.month, prev)
     }
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-12)
-      .map(([month, t]) => ({
+      .map(([month, { assets, liabilities }]) => ({
         month,
-        total: (t.USD || 0) + (t.EUR || 0) * 1.08 + (t.UAH || 0) / 41.5,
+        total: assets - liabilities,
+        assets,
+        liabilities,
       }))
   }, [items])
 
@@ -268,28 +273,60 @@ export default function Budget() {
             </span>
           )}
         </div>
-        {monthlyTotals.length >= 2 && (
-          <div className="mt-3 [&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent" style={{ height: 60 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyTotals} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-                <Tooltip
-                  formatter={(v) => [formatMoney(v), 'USD']}
-                  labelFormatter={(_, payload) => payload?.[0]?.payload?.month ? monthLabel(payload[0].payload.month) : ''}
-                  contentStyle={tooltipStyle}
-                  itemStyle={tooltipItemStyle}
-                  labelStyle={tooltipLabelStyle}
-                  wrapperStyle={{ outline: 'none' }}
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                />
-                <Bar dataKey="total" radius={[2, 2, 0, 0]} maxBarSize={16}>
-                  {monthlyTotals.map((entry, i) => (
-                    <Cell key={i} fill={entry.month === selectedMonth ? '#60a5fa' : 'rgba(96,165,250,0.35)'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        {monthlyTotals.length >= 2 && (() => {
+          const isPositive = totalUsdForSelectedMonth >= 0
+          const lineColor = isPositive ? '#34d399' : '#f87171'
+          const gradId = 'budgetAreaGrad'
+          return (
+            <div className="mt-4 [&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent" style={{ height: 88 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyTotals} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={lineColor} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={m => {
+                      const [y, mo] = m.split('-')
+                      return `${MONTHS_UK[parseInt(mo, 10) - 1].slice(0, 3)} ${y.slice(2)}`
+                    }}
+                    tick={{ fontSize: 10, fill: '#475569' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" strokeDasharray="3 3" />
+                  <Tooltip
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.month ? monthLabel(payload[0].payload.month) : ''}
+                    formatter={(v, name) => {
+                      const labels = { total: 'Нетто', assets: 'Активи', liabilities: 'Зобов\'яз.' }
+                      return [formatMoney(v), labels[name] ?? name]
+                    }}
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    wrapperStyle={{ outline: 'none' }}
+                    cursor={{ stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1 }}
+                  />
+                  <Area type="monotone" dataKey="assets" stroke="rgba(52,211,153,0.5)" strokeWidth={1} fill="none" dot={false} isAnimationActive={false} activeDot={false} />
+                  <Area type="monotone" dataKey="liabilities" stroke="rgba(248,113,113,0.5)" strokeWidth={1} fill="none" dot={false} isAnimationActive={false} activeDot={false} />
+                  <Area
+                    type="monotone"
+                    dataKey="total"
+                    stroke={lineColor}
+                    strokeWidth={2}
+                    fill={`url(#${gradId})`}
+                    dot={false}
+                    isAnimationActive={false}
+                    activeDot={{ r: 4, fill: lineColor, stroke: '#0f172a', strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Month navigator */}
