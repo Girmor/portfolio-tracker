@@ -65,11 +65,13 @@ const cashflowSchema = z.object({
 })
 
 const tooltipStyle = {
-  background: '#1e293b',
+  backgroundColor: '#1e293b',
   border: '1px solid rgba(255,255,255,0.12)',
   borderRadius: 8,
   color: '#e2e8f0',
 }
+const tooltipItemStyle = { color: '#e2e8f0' }
+const tooltipLabelStyle = { color: '#94a3b8' }
 
 export default function Budget() {
   const [showForm, setShowForm] = useState(false)
@@ -274,7 +276,9 @@ export default function Budget() {
                 <Tooltip
                   formatter={(v) => [formatMoney(v), 'USD']}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.month ? monthLabel(payload[0].payload.month) : ''}
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+                  contentStyle={tooltipStyle}
+                  itemStyle={tooltipItemStyle}
+                  labelStyle={tooltipLabelStyle}
                   wrapperStyle={{ outline: 'none' }}
                   cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                 />
@@ -585,13 +589,13 @@ export default function Budget() {
                   </div>
                 )
               })()}
-              <div style={{ height: 240 }}>
+              <div className="[&_.recharts-surface]:bg-transparent [&_.recharts-wrapper]:bg-transparent" style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
                     <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
                     <YAxis width={60} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}к`} />
-                    <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} />
+                    <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
                     <Legend wrapperStyle={{ color: '#94a3b8' }} />
                     <Bar dataKey="Доходи"     fill="#10b981" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Доходи'     ? 1 : 0.15} />
                     <Bar dataKey="Витрати"    fill="#f97316" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Витрати'    ? 1 : 0.15} />
