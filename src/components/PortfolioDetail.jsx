@@ -564,7 +564,7 @@ export default function PortfolioDetail() {
               {holdingsTable.getHeaderGroups().map(hg => (
                 <tr key={hg.id} className="border-b border-white/10 bg-white/5">
                   {hg.headers.map(header => (
-                    <th key={header.id} className="py-3 px-3 text-left">
+                    <th key={header.id} className={`py-3 px-3 ${header.column.id !== 'ticker' && header.column.id !== 'actions' ? 'text-right' : 'text-left'}`}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
                     </th>
                   ))}
