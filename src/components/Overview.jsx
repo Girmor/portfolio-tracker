@@ -7,6 +7,8 @@ import { useBudgetQuery } from '../hooks/useBudgetQuery'
 import { usePricesQuery } from '../hooks/usePricesQuery'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
 
+function currentMonth() { return new Date().toISOString().slice(0, 7) }
+
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
 function StatCardSkeleton() {
@@ -53,7 +55,10 @@ export default function Overview() {
     return (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).value, 0)
   }
 
-  const budgetTotal = budget.reduce((sum, b) => {
+  const currentMonthKey = currentMonth()
+  const currentMonthBudget = budget.filter(b => b.month === currentMonthKey)
+
+  const budgetTotal = currentMonthBudget.reduce((sum, b) => {
     if (b.currency === 'USD') return sum + Number(b.amount)
     if (b.currency === 'EUR') return sum + Number(b.amount) * 1.08
     if (b.currency === 'UAH') return sum + Number(b.amount) / 41.5
@@ -111,7 +116,9 @@ export default function Overview() {
           <div className="glass-card rounded-xl p-4">
             <div className="text-xs text-slate-400 mb-1">Загальний капітал</div>
             <div className="text-xl font-bold text-white">{formatMoney(totalCapital)}</div>
-            <div className="text-xs text-slate-500 mt-1.5">Бюджет: {formatMoney(budgetTotal)}</div>
+            <div className="text-xs text-slate-500 mt-1.5">
+              Бюджет: <span className={budgetTotal >= 0 ? 'text-slate-400' : 'text-red-400'}>{formatMoney(budgetTotal)}</span>
+            </div>
           </div>
 
           <div className="glass-card rounded-xl p-4">
@@ -199,7 +206,7 @@ export default function Overview() {
       </div>
 
       {/* Overall History Chart */}
-      <PortfolioHistoryChart portfolioId={null} positions={allPositions} currentPrices={prices} />
+      <PortfolioHistoryChart portfolioId={null} positions={allPositions} currentPrices={prices} budgetItems={budget} />
 
       {/* Portfolio list */}
       <div className="glass-card rounded-xl p-5">

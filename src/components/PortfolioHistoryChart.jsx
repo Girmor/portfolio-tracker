@@ -11,7 +11,7 @@ const PERIODS = [
   { key: 'all', label: 'Все', days: null },
 ]
 
-function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
+function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, budgetItems = [] }) {
   const [snapshots, setSnapshots] = useState([])
   const [snapLoading, setSnapLoading] = useState(false)
   const [period, setPeriod] = useState('all')
@@ -74,12 +74,41 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   const allPoints = positions ? tradePoints : snapshotPoints
   const loading = positions ? tradeLoading : snapLoading
 
+  // Build month -> USD total map from all budget items (for history chart)
+  const budgetByMonth = useMemo(() => {
+    const map = new Map()
+    for (const b of budgetItems) {
+      const usd = b.currency === 'USD' ? Number(b.amount)
+               : b.currency === 'EUR' ? Number(b.amount) * 1.08
+               : Number(b.amount) / 41.5
+      map.set(b.month, (map.get(b.month) || 0) + usd)
+    }
+    return map
+  }, [budgetItems])
+
+  const budgetMonthsSorted = useMemo(() => [...budgetByMonth.keys()].sort(), [budgetByMonth])
+
   const chartData = useMemo(() => {
     const periodObj = PERIODS.find(p => p.key === period)
-    if (!periodObj?.days) return allPoints
-    const since = Date.now() - periodObj.days * 24 * 60 * 60 * 1000
-    return allPoints.filter(p => p.date >= since)
-  }, [allPoints, period])
+    const filtered = !periodObj?.days
+      ? allPoints
+      : allPoints.filter(p => p.date >= Date.now() - periodObj.days * 24 * 60 * 60 * 1000)
+
+    // Add budget to value when showing overview (portfolioId null) and budget exists
+    if (portfolioId !== null || !budgetMonthsSorted.length) return filtered
+
+    return filtered.map(p => {
+      const pointMonth = new Date(p.date).toISOString().slice(0, 7)
+      // find most recent budget month <= pointMonth
+      let best = null
+      for (const m of budgetMonthsSorted) {
+        if (m <= pointMonth) best = m
+        else break
+      }
+      const budgetUsd = best ? (budgetByMonth.get(best) || 0) : 0
+      return { ...p, value: p.value + budgetUsd }
+    })
+  }, [allPoints, period, portfolioId, budgetByMonth, budgetMonthsSorted])
 
   // Compute smart X-axis ticks based on visible data range
   const { xTicks, xFormatter } = useMemo(() => {
@@ -135,7 +164,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
     <div className="glass-card rounded-xl p-5 mb-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h3 className="text-sm font-semibold text-slate-200">Історія портфеля</h3>
+        <h3 className="text-sm font-semibold text-slate-200">{portfolioId === null ? 'Історія капіталу' : 'Історія портфеля'}</h3>
         <div className="flex flex-wrap items-center gap-2">
           {/* Mode toggle */}
           <div className="flex bg-white/8 rounded-lg p-0.5">
