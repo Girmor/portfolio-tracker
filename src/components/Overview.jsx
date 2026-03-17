@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { PieChart, Pie, Cell, Tooltip } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, AreaChart, Area, ResponsiveContainer } from 'recharts'
 import { Skeleton } from './ui/skeleton'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
 import { usePortfoliosWithPositionsQuery } from '../hooks/usePortfoliosQuery'
@@ -65,6 +66,22 @@ export default function Overview() {
     if (b.currency === 'UAH') return sum + sign * Number(b.amount) / 41.5
     return sum + sign * Number(b.amount)
   }, 0)
+
+  // Monthly net budget totals (assets − liabilities) for the mini sparkline
+  const budgetMonthlyTotals = useMemo(() => {
+    const map = new Map()
+    for (const b of budget) {
+      const sign = b.type === 'liability' ? -1 : 1
+      const usd = b.currency === 'USD' ? sign * Number(b.amount)
+               : b.currency === 'EUR' ? sign * Number(b.amount) * 1.08
+               : sign * Number(b.amount) / 41.5
+      map.set(b.month, (map.get(b.month) || 0) + usd)
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([month, total]) => ({ month, total }))
+  }, [budget])
 
   const investmentTotal = portfolios.reduce((sum, p) => sum + calcPortfolioValue(p), 0)
   const totalInvested = portfolios.reduce((sum, p) =>
@@ -159,24 +176,64 @@ export default function Overview() {
           </div>
 
           {/* Budget card — full width */}
-          <div className="col-span-2 glass-card rounded-xl p-4">
-            <div className="text-xs text-slate-400 mb-1">Загальний бюджет (в USD) — поточний місяць</div>
-            <div className={`text-xl font-bold ${budgetTotal >= 0 ? 'text-white' : 'text-red-400'}`}>
-              {formatMoney(budgetTotal)}
+          <div className="col-span-2 glass-card rounded-xl p-4 flex items-center gap-4">
+            {/* Text side */}
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-slate-400 mb-1">Загальний бюджет (в USD)</div>
+              <div className={`text-xl font-bold ${budgetTotal >= 0 ? 'text-white' : 'text-red-400'}`}>
+                {formatMoney(budgetTotal)}
+              </div>
+              {currentMonthBudget.length > 0 && (() => {
+                const assetsByCur = {}, liabByCur = {}
+                currentMonthBudget.forEach(b => {
+                  if (b.type === 'liability') liabByCur[b.currency] = (liabByCur[b.currency] || 0) + Number(b.amount)
+                  else assetsByCur[b.currency] = (assetsByCur[b.currency] || 0) + Number(b.amount)
+                })
+                return (
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs">
+                    {Object.entries(assetsByCur).map(([cur, total]) => (
+                      <span key={`a-${cur}`} className="text-emerald-400">{cur}: {formatMoney(total, cur)}</span>
+                    ))}
+                    {Object.entries(liabByCur).map(([cur, total]) => (
+                      <span key={`l-${cur}`} className="text-red-400">−{cur}: {formatMoney(total, cur)}</span>
+                    ))}
+                  </div>
+                )
+              })()}
+              {currentMonthBudget.length === 0 && (
+                <div className="text-xs text-slate-500 mt-1">Немає даних за поточний місяць</div>
+              )}
             </div>
-            {currentMonthBudget.length > 0 && (() => {
-              const byCur = {}
-              currentMonthBudget.forEach(b => { byCur[b.currency] = (byCur[b.currency] || 0) + Number(b.amount) })
-              return (
-                <div className="flex gap-4 mt-1.5 text-xs text-slate-400">
-                  {Object.entries(byCur).map(([cur, total]) => (
-                    <span key={cur}>{cur}: {formatMoney(total, cur)}</span>
-                  ))}
-                </div>
-              )
-            })()}
-            {currentMonthBudget.length === 0 && (
-              <div className="text-xs text-slate-500 mt-1">Немає даних за поточний місяць</div>
+
+            {/* Mini sparkline — only when ≥2 months of data */}
+            {budgetMonthlyTotals.length >= 2 && (
+              <div className="shrink-0 w-40" style={{ height: 52 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={budgetMonthlyTotals} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="budgetGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={budgetTotal >= 0 ? 'rgba(52,211,153,0.4)' : 'rgba(248,113,113,0.4)'} />
+                        <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+                      </linearGradient>
+                    </defs>
+                    <Tooltip
+                      formatter={(v) => [formatMoney(v), 'Бюджет']}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.month ?? ''}
+                      contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0', fontSize: 11 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      stroke={budgetTotal >= 0 ? '#34d399' : '#f87171'}
+                      strokeWidth={1.5}
+                      fill="url(#budgetGrad)"
+                      dot={false}
+                      isAnimationActive={false}
+                      activeDot={{ r: 3, stroke: '#1e293b', strokeWidth: 1.5 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </div>
         </div>
