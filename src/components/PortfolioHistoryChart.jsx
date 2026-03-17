@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { getBtcHistoricalPrices } from '../lib/priceService'
+import { getBtcHistoricalPrices, getSpxHistoricalPrices } from '../lib/priceService'
 import { useTradeHistory } from '../hooks/useTradeHistory'
 import { formatMoney, formatPercent } from '../lib/formatters'
 
@@ -16,10 +16,13 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   const [snapshots, setSnapshots] = useState([])
   const [snapLoading, setSnapLoading] = useState(false)
   const [btcRaw, setBtcRaw] = useState([])
+  const [spxRaw, setSpxRaw] = useState([])
   const [period, setPeriod] = useState('all')
   const [mode, setMode] = useState('value')
   const [showBtc, setShowBtc] = useState(false)
+  const [showSpx, setShowSpx] = useState(false)
   const [btcLoading, setBtcLoading] = useState(false)
+  const [spxLoading, setSpxLoading] = useState(false)
   const [chartWidth, setChartWidth] = useState(0)
   const roRef = useRef(null)
 
@@ -83,12 +86,24 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
     if (!showBtc || btcRaw.length > 0) return
     async function loadBtc() {
       setBtcLoading(true)
-      const data = await getBtcHistoricalPrices(365)
+      const data = await getBtcHistoricalPrices()
       setBtcRaw(data)
       setBtcLoading(false)
     }
     loadBtc()
   }, [showBtc, btcRaw.length])
+
+  // SPX comparison overlay
+  useEffect(() => {
+    if (!showSpx || spxRaw.length > 0) return
+    async function loadSpx() {
+      setSpxLoading(true)
+      const data = await getSpxHistoricalPrices()
+      setSpxRaw(data)
+      setSpxLoading(false)
+    }
+    loadSpx()
+  }, [showSpx, spxRaw.length])
 
   const chartData = useMemo(() => {
     const periodObj = PERIODS.find(p => p.key === period)
@@ -98,26 +113,39 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
   }, [allPoints, period])
 
   const mergedData = useMemo(() => {
-    if (!showBtc || mode !== 'profit' || !btcRaw.length || !chartData.length) return chartData
-    const chartStart = chartData[0].date
-    let btcStartPrice = null
-    for (const p of btcRaw) {
-      if (p.date >= chartStart - 24 * 60 * 60 * 1000) {
-        btcStartPrice = p.price
-        break
+    if (!chartData.length) return chartData
+    if (mode !== 'profit') return chartData
+
+    function buildPercentMap(raw) {
+      if (!raw.length) return null
+      const chartStart = chartData[0].date
+      let startPrice = null
+      for (const p of raw) {
+        if (p.date >= chartStart - 24 * 60 * 60 * 1000) { startPrice = p.price; break }
       }
+      if (!startPrice) startPrice = raw[0]?.price || 1
+      const byDay = new Map()
+      raw.forEach(p => {
+        const day = new Date(p.date).toISOString().split('T')[0]
+        byDay.set(day, ((p.price - startPrice) / startPrice) * 100)
+      })
+      return byDay
     }
-    if (!btcStartPrice) btcStartPrice = btcRaw[0]?.price || 1
-    const btcByDay = new Map()
-    btcRaw.forEach(p => {
-      const day = new Date(p.date).toISOString().split('T')[0]
-      btcByDay.set(day, ((p.price - btcStartPrice) / btcStartPrice) * 100)
+
+    const btcMap = showBtc && btcRaw.length ? buildPercentMap(btcRaw) : null
+    const spxMap = showSpx && spxRaw.length ? buildPercentMap(spxRaw) : null
+
+    if (!btcMap && !spxMap) return chartData
+
+    return chartData.map(d => {
+      const day = new Date(d.date).toISOString().split('T')[0]
+      return {
+        ...d,
+        ...(btcMap ? { btcPercent: btcMap.get(day) ?? null } : {}),
+        ...(spxMap ? { spxPercent: spxMap.get(day) ?? null } : {}),
+      }
     })
-    return chartData.map(d => ({
-      ...d,
-      btcPercent: btcByDay.get(new Date(d.date).toISOString().split('T')[0]) ?? null,
-    }))
-  }, [chartData, btcRaw, showBtc, mode])
+  }, [chartData, btcRaw, spxRaw, showBtc, showSpx, mode])
 
   // Compute smart X-axis ticks based on visible data range
   const { xTicks, xFormatter } = useMemo(() => {
@@ -196,7 +224,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
             </button>
           </div>
 
-          {/* BTC toggle */}
+          {/* BTC / SPX toggles */}
           <button
             onClick={() => mode === 'profit' && setShowBtc(!showBtc)}
             className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
@@ -206,9 +234,22 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                   ? 'border-orange-400/40 bg-orange-500/15 text-orange-400'
                   : 'border-white/12 text-slate-400 hover:bg-white/5'
             }`}
-            title={mode !== 'profit' ? 'Порівняння з BTC доступне лише в режимі Прибуток (%)' : ''}
+            title={mode !== 'profit' ? 'Доступно лише в режимі Прибуток (%)' : ''}
           >
             vs BTC
+          </button>
+          <button
+            onClick={() => mode === 'profit' && setShowSpx(!showSpx)}
+            className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
+              mode !== 'profit'
+                ? 'border-white/8 text-slate-600 cursor-not-allowed'
+                : showSpx
+                  ? 'border-green-400/40 bg-green-500/15 text-green-400'
+                  : 'border-white/12 text-slate-400 hover:bg-white/5'
+            }`}
+            title={mode !== 'profit' ? 'Доступно лише в режимі Прибуток (%)' : ''}
+          >
+            vs SPX
           </button>
 
           {/* Period selector */}
@@ -229,7 +270,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
       </div>
 
       {/* Chart */}
-      {loading || btcLoading ? (
+      {loading || btcLoading || spxLoading ? (
         <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm">
           Завантаження...
         </div>
@@ -265,10 +306,11 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                 }
               />
               <Tooltip
-                formatter={(v, name) => [
-                  name === 'btcPercent' ? formatPercent(v) : formatter(v),
-                  name === 'btcPercent' ? 'BTC' : (mode === 'value' ? 'Капітал' : 'Прибуток'),
-                ]}
+                formatter={(v, name) => {
+                  if (name === 'btcPercent') return [formatPercent(v), 'BTC']
+                  if (name === 'spxPercent') return [formatPercent(v), 'S&P 500']
+                  return [formatter(v), mode === 'value' ? 'Капітал' : 'Прибуток']
+                }}
                 labelFormatter={(ts) => new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 contentStyle={tooltipStyle}
               />
@@ -293,22 +335,41 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {} }) {
                   strokeDasharray="4 3"
                 />
               )}
+              {showSpx && mode === 'profit' && (
+                <Line
+                  type="monotone"
+                  dataKey="spxPercent"
+                  stroke="#22c55e"
+                  strokeWidth={1.5}
+                  dot={false}
+                  isAnimationActive={false}
+                  strokeDasharray="4 3"
+                />
+              )}
             </AreaChart>
           )}
         </div>
       )}
 
-      {/* Legend for BTC */}
-      {showBtc && mode === 'profit' && mergedData.length >= 2 && (
+      {/* Legend */}
+      {mode === 'profit' && (showBtc || showSpx) && mergedData.length >= 2 && (
         <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-0.5 bg-blue-400 rounded" />
             <span>Портфель</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-orange-400 rounded" />
-            <span>BTC</span>
-          </div>
+          {showBtc && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-orange-400 rounded" />
+              <span>BTC</span>
+            </div>
+          )}
+          {showSpx && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-green-400 rounded" />
+              <span>S&P 500</span>
+            </div>
+          )}
         </div>
       )}
     </div>

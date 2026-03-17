@@ -187,19 +187,51 @@ export async function resolveMissingCoinIds(positions, supabase) {
   return updatedPositions
 }
 
-export async function getBtcHistoricalPrices(days = 365) {
+function compCacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function compCacheSet(key, entries) {
+  try { localStorage.setItem(key, JSON.stringify(entries)) } catch {}
+}
+
+export async function getBtcHistoricalPrices() {
+  const cacheKey = 'ph_btc_comparison'
   try {
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
+      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=max`
     )
-    if (!res.ok) return []
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    return (data.prices || []).map(([timestamp, price]) => ({
-      date: timestamp,
-      price,
-    }))
+    const prices = (data.prices || []).map(([timestamp, price]) => ({ date: timestamp, price }))
+    if (prices.length > 0) compCacheSet(cacheKey, prices)
+    return prices
   } catch {
-    return []
+    return compCacheGet(cacheKey) ?? []
+  }
+}
+
+export async function getSpxHistoricalPrices() {
+  const cacheKey = 'ph_spx_comparison'
+  const key = import.meta.env.VITE_FINNHUB_KEY
+  if (!key) return compCacheGet(cacheKey) ?? []
+  const from = Math.floor(new Date('2010-01-01').getTime() / 1000)
+  const to = Math.floor(Date.now() / 1000)
+  try {
+    const res = await fetch(
+      `https://finnhub.io/api/v1/stock/candle?symbol=SPY&resolution=D&from=${from}&to=${to}&token=${key}`
+    )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data.s !== 'ok') throw new Error('no data')
+    const prices = data.t.map((ts, i) => ({ date: ts * 1000, price: data.c[i] }))
+    if (prices.length > 0) compCacheSet(cacheKey, prices)
+    return prices
+  } catch {
+    return compCacheGet(cacheKey) ?? []
   }
 }
 
