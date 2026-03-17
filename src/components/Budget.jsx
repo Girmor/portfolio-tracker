@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { formatMoney } from '../lib/formatters'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   useBudgetQuery,
@@ -22,6 +22,17 @@ const MONTHS_UK = ['Січень','Лютий','Березень','Квітен�
                    'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень']
 
 function currentMonth() { return new Date().toISOString().slice(0, 7) }
+
+function monthLabel(monthKey) {
+  const [year, month] = monthKey.split('-')
+  return `${MONTHS_UK[parseInt(month, 10) - 1]} ${year}`
+}
+
+function addMonths(monthKey, delta) {
+  const [year, month] = monthKey.split('-').map(Number)
+  const d = new Date(year, month - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 function buildYearRows(cashflow, year) {
   return MONTHS_UK.map((name, i) => {
@@ -67,6 +78,7 @@ export default function Budget() {
   const [viewMode, setViewMode] = useState('chart')
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [activeSeries, setActiveSeries] = useState(null)
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
 
   const { data: items = [], isLoading: budgetLoading } = useBudgetQuery()
   const { data: cashflow = [], isLoading: cashflowLoading } = useCashflowQuery()
@@ -90,7 +102,7 @@ export default function Budget() {
 
   async function onBudgetSubmit(values) {
     try {
-      const payload = { ...values, updated_at: new Date().toISOString() }
+      const payload = { ...values, month: selectedMonth, updated_at: new Date().toISOString() }
       if (editingId) {
         await updateBudget.mutateAsync({ id: editingId, data: payload })
         toast.success('Рахунок оновлено')
@@ -169,8 +181,11 @@ export default function Budget() {
     setShowCashflowForm(true)
   }
 
+  // Filter budget items to selected month
+  const filteredItems = items.filter(i => i.month === selectedMonth)
+
   const grouped = { UAH: [], USD: [], EUR: [] }
-  items.forEach(item => {
+  filteredItems.forEach(item => {
     if (!grouped[item.currency]) grouped[item.currency] = []
     grouped[item.currency].push(item)
   })
@@ -180,7 +195,24 @@ export default function Budget() {
     totals[cur] = list.reduce((sum, i) => sum + Number(i.amount), 0)
   }
 
-  const totalUsd = (totals.USD || 0) + (totals.EUR || 0) * 1.08 + (totals.UAH || 0) / 41.5
+  const totalUsdForSelectedMonth = (totals.USD || 0) + (totals.EUR || 0) * 1.08 + (totals.UAH || 0) / 41.5
+
+  // Monthly totals for sparkline (all items, not filtered)
+  const monthlyTotals = useMemo(() => {
+    const map = new Map()
+    for (const item of items) {
+      const acc = map.get(item.month) || { UAH: 0, USD: 0, EUR: 0 }
+      acc[item.currency] = (acc[item.currency] || 0) + Number(item.amount)
+      map.set(item.month, acc)
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([month, t]) => ({
+        month,
+        total: (t.USD || 0) + (t.EUR || 0) * 1.08 + (t.UAH || 0) / 41.5,
+      }))
+  }, [items])
 
   if (budgetLoading) return <div className="text-slate-400 animate-pulse">Завантаження...</div>
 
@@ -196,19 +228,57 @@ export default function Budget() {
         </button>
       </div>
 
-      <div className="glass-card rounded-xl p-5 mb-6">
-        <div className="text-sm text-slate-400 mb-1">Загальний бюджет (в USD)</div>
-        <div className="text-2xl font-bold text-white">{formatMoney(totalUsd)}</div>
-        <div className="flex gap-4 mt-2 text-sm text-slate-300">
+      {/* Total card with sparkline */}
+      <div className="glass-card rounded-xl p-5 mb-4">
+        <div className="text-xs text-slate-400 mb-1">Загальний бюджет (в USD)</div>
+        <div className="text-2xl font-bold text-white">{formatMoney(totalUsdForSelectedMonth)}</div>
+        <div className="flex gap-4 mt-1 text-sm text-slate-300">
           {Object.entries(totals).map(([cur, total]) => (
             total > 0 && <span key={cur}>{CURRENCY_ICONS[cur]} {formatMoney(total, cur)}</span>
           ))}
         </div>
+        {monthlyTotals.length >= 2 && (
+          <div className="mt-3" style={{ height: 60 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyTotals} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                <Tooltip
+                  formatter={(v) => [formatMoney(v), 'USD']}
+                  labelFormatter={(m) => monthLabel(m)}
+                  contentStyle={tooltipStyle}
+                />
+                <Bar dataKey="total" radius={[2, 2, 0, 0]} maxBarSize={16}>
+                  {monthlyTotals.map((entry, i) => (
+                    <Cell key={i} fill={entry.month === selectedMonth ? '#60a5fa' : 'rgba(96,165,250,0.35)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Month navigator */}
+      <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
+        <button
+          onClick={() => setSelectedMonth(m => addMonths(m, -1))}
+          className="hover:text-slate-200 px-1 transition-colors"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span className="font-medium text-slate-200 w-36 text-center">{monthLabel(selectedMonth)}</span>
+        <button
+          onClick={() => setSelectedMonth(m => addMonths(m, 1))}
+          disabled={selectedMonth >= currentMonth()}
+          className="hover:text-slate-200 px-1 disabled:opacity-30 transition-colors"
+        >
+          <ChevronRight size={14} />
+        </button>
       </div>
 
       {showForm && (
         <form onSubmit={hsBudget(onBudgetSubmit)} className="glass-card rounded-xl p-4 mb-6">
-          <h3 className="font-semibold text-slate-200 mb-3">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
+          <h3 className="font-semibold text-slate-200 mb-1">{editingId ? 'Редагувати' : 'Новий рахунок'}</h3>
+          <div className="text-xs text-slate-400 mb-3">Місяць: {monthLabel(selectedMonth)}</div>
           <div className="flex gap-3 items-start">
             <div className="flex-1">
               <label className="block text-sm text-slate-300 mb-1">Назва</label>
@@ -248,21 +318,22 @@ export default function Budget() {
         </form>
       )}
 
+      {/* Account cards — filtered by selectedMonth */}
       {Object.entries(grouped).map(([currency, list]) =>
         list.length > 0 && (
-          <div key={currency} className="mb-6">
-            <h3 className="text-lg font-semibold text-slate-200 mb-3">
+          <div key={currency} className="mb-5">
+            <h3 className="text-base font-semibold text-slate-200 mb-2">
               {CURRENCY_ICONS[currency]} {currency}
-              <span className="text-sm font-normal text-slate-400 ml-2">Всього: {formatMoney(totals[currency], currency)}</span>
+              <span className="text-xs font-normal text-slate-400 ml-2">Всього: {formatMoney(totals[currency], currency)}</span>
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
               {list.map(item => (
-                <div key={item.id} className="glass-card rounded-xl p-4 hover:bg-white/[0.09] transition-colors">
+                <div key={item.id} className="glass-card rounded-xl p-3 hover:bg-white/[0.09] transition-colors">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="font-medium text-slate-200">{item.label}</div>
+                      <div className="text-sm text-slate-200">{item.label}</div>
                       <div
-                        className="text-xl font-bold text-white mt-1 cursor-pointer hover:text-blue-400 transition-colors"
+                        className="text-base font-bold text-white mt-0.5 cursor-pointer hover:text-blue-400 transition-colors"
                         onClick={() => handleUpdateAmount(item)}
                       >
                         {formatMoney(item.amount, item.currency)}
@@ -280,10 +351,10 @@ export default function Budget() {
         )
       )}
 
-      {items.length === 0 && (
-        <div className="text-center py-12 text-slate-400">
-          <p className="text-lg mb-2">Немає рахунків</p>
-          <p className="text-sm">Додайте рахунки для відстеження готівки та балансів</p>
+      {filteredItems.length === 0 && (
+        <div className="text-center py-10 text-slate-400">
+          <p className="text-base mb-1">Немає рахунків за {monthLabel(selectedMonth)}</p>
+          <p className="text-sm">Додайте рахунки або перейдіть до іншого місяця</p>
         </div>
       )}
 
