@@ -156,6 +156,28 @@ export default function Overview() {
               <div className="text-sm text-slate-500 mt-1">—</div>
             )}
           </div>
+
+          {/* Budget card — full width */}
+          <div className="col-span-2 glass-card rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">Загальний бюджет (в USD) — поточний місяць</div>
+            <div className={`text-xl font-bold ${budgetTotal >= 0 ? 'text-white' : 'text-red-400'}`}>
+              {formatMoney(budgetTotal)}
+            </div>
+            {currentMonthBudget.length > 0 && (() => {
+              const byCur = {}
+              currentMonthBudget.forEach(b => { byCur[b.currency] = (byCur[b.currency] || 0) + Number(b.amount) })
+              return (
+                <div className="flex gap-4 mt-1.5 text-xs text-slate-400">
+                  {Object.entries(byCur).map(([cur, total]) => (
+                    <span key={cur}>{cur}: {formatMoney(total, cur)}</span>
+                  ))}
+                </div>
+              )
+            })()}
+            {currentMonthBudget.length === 0 && (
+              <div className="text-xs text-slate-500 mt-1">Немає даних за поточний місяць</div>
+            )}
+          </div>
         </div>
 
         {/* Allocation — 1/3 */}
