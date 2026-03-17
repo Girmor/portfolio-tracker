@@ -183,46 +183,42 @@ export default function Overview() {
 
         {/* Allocation — 1/3 */}
         {pieData.length > 0 && (
-          <div className="glass-card rounded-xl p-4 lg:w-1/3 shrink-0">
-            <div className="text-xs text-slate-400 mb-2">Розподіл капіталу</div>
-            <div className="flex items-center justify-center gap-5">
-              <div style={{ width: 128, height: 128 }} className="shrink-0">
-                <PieChart width={128} height={128}>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={42}
-                    outerRadius={62}
-                    paddingAngle={3}
-                    cornerRadius={4}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v) => formatMoney(v)}
-                    contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
-                  />
-                </PieChart>
-              </div>
-              <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '140px' }}>
-                {pieData.map((item, i) => {
-                  const percent = totalCapital > 0
-                    ? ((item.value / totalCapital) * 100).toFixed(1)
-                    : '0.0'
-                  return (
-                    <div key={item.name} className="flex items-center gap-2">
-                      <div
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                      />
-                      <span className="text-sm text-slate-200 whitespace-nowrap">{item.name}</span>
-                      <span className="text-sm text-slate-400 tabular-nums">{percent}%</span>
-                    </div>
-                  )
-                })}
-              </div>
+          <div className="glass-card rounded-xl p-4 lg:w-1/3 shrink-0 flex flex-col items-center justify-center">
+            <div className="text-xs text-slate-400 mb-3 self-start">Розподіл капіталу</div>
+            <PieChart width={200} height={200}>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={68}
+                outerRadius={92}
+                paddingAngle={3}
+                cornerRadius={4}
+                dataKey="value"
+              >
+                {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Pie>
+              <Tooltip
+                formatter={(v) => formatMoney(v)}
+                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+              />
+            </PieChart>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+              {pieData.map((item, i) => {
+                const percent = totalCapital > 0
+                  ? ((item.value / totalCapital) * 100).toFixed(1)
+                  : '0.0'
+                return (
+                  <div key={item.name} className="flex items-center gap-1.5">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                    />
+                    <span className="text-xs text-slate-200 whitespace-nowrap">{item.name}</span>
+                    <span className="text-xs text-slate-400 tabular-nums">{percent}%</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
