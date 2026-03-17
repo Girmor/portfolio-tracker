@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Skeleton } from './ui/skeleton'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
 import { usePortfoliosWithPositionsQuery } from '../hooks/usePortfoliosQuery'
@@ -28,23 +28,29 @@ export default function Overview() {
 
   const loading = portfoliosLoading || budgetLoading
 
+  // AVCO model — consistent with PortfolioDetail
   function calcPositionValue(pos) {
     const trades = pos.trades || []
-    let qty = 0, cost = 0
+    let totalBuyQty = 0, totalBuyCost = 0
+    let totalSellQty = 0, totalSellProceeds = 0
     trades.forEach(t => {
-      if (t.type === 'buy') { qty += Number(t.quantity); cost += Number(t.price) * Number(t.quantity) }
-      else { qty -= Number(t.quantity); cost -= Number(t.price) * Number(t.quantity) }
+      const qty = Number(t.quantity)
+      const price = Number(t.price)
+      if (t.type === 'buy') { totalBuyQty += qty; totalBuyCost += price * qty }
+      else { totalSellQty += qty; totalSellProceeds += price * qty }
     })
-    const price = prices[pos.ticker] ?? 0
-    return { value: qty * price, cost, pnl: qty * price - cost }
+    const avgPrice = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0
+    const remainingQty = totalBuyQty - totalSellQty
+    const investedRemaining = avgPrice * remainingQty
+    const currentPrice = prices[pos.ticker] ?? 0
+    const value = remainingQty * currentPrice
+    // Total return = unrealized + realized
+    const pnl = (value + totalSellProceeds) - totalBuyCost
+    return { value, cost: investedRemaining, invested: totalBuyCost, pnl }
   }
 
   function calcPortfolioValue(p) {
     return (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).value, 0)
-  }
-
-  function calcPortfolioPnl(p) {
-    return (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).pnl, 0)
   }
 
   const budgetTotal = budget.reduce((sum, b) => {
@@ -55,19 +61,21 @@ export default function Overview() {
   }, 0)
 
   const investmentTotal = portfolios.reduce((sum, p) => sum + calcPortfolioValue(p), 0)
-  const investmentCost = portfolios.reduce((sum, p) =>
-    sum + (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).cost, 0)
+  const totalInvested = portfolios.reduce((sum, p) =>
+    sum + (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).invested, 0)
   , 0)
   const totalCapital = budgetTotal + investmentTotal
-  const totalPnl = portfolios.reduce((sum, p) => sum + calcPortfolioPnl(p), 0)
-  const totalPnlPercent = investmentCost > 0 ? (totalPnl / investmentCost) * 100 : 0
+  const totalPnl = portfolios.reduce((sum, p) =>
+    sum + (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).pnl, 0)
+  , 0)
+  const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0
 
   const portfolioPnls = portfolios.map(p => {
     const value = calcPortfolioValue(p)
-    const cost = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).cost, 0)
-    const pnl = calcPortfolioPnl(p)
-    const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0
-    return { portfolio: p, value, cost, pnl, pnlPercent }
+    const invested = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).invested, 0)
+    const pnl = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).pnl, 0)
+    const pnlPercent = invested > 0 ? (pnl / invested) * 100 : 0
+    return { portfolio: p, value, invested, pnl, pnlPercent }
   })
   const bestPortfolio = portfolioPnls.reduce((best, item) =>
     !best || item.pnlPercent > best.pnlPercent ? item : best
@@ -80,11 +88,6 @@ export default function Overview() {
     ...portfolios.map((p) => ({ name: p.name, value: Math.max(0, calcPortfolioValue(p)) })),
     ...(budgetTotal > 0 ? [{ name: 'Бюджет', value: budgetTotal }] : []),
   ].filter(d => d.value > 0).sort((a, b) => b.value - a.value)
-
-  const barData = portfolios.map(p => ({
-    name: p.name,
-    pnl: calcPortfolioPnl(p),
-  }))
 
   if (loading) {
     return (
@@ -198,31 +201,6 @@ export default function Overview() {
       {/* Overall History Chart */}
       <PortfolioHistoryChart portfolioId={null} positions={allPositions} currentPrices={prices} />
 
-      {/* P&L by portfolios */}
-      {barData.length > 0 && (
-        <div className="glass-card rounded-xl p-5 mb-6">
-          <h3 className="text-sm font-semibold text-slate-200 mb-4">P&L по портфелях</h3>
-          <div style={{ height: 180 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <Tooltip
-                  formatter={(v) => formatMoney(v)}
-                  contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
-                />
-                <Bar dataKey="pnl" fill="#3B82F6" radius={[4, 4, 0, 0]}>
-                  {barData.map((entry, i) => (
-                    <Cell key={i} fill={entry.pnl >= 0 ? '#10b981' : '#f87171'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
       {/* Portfolio list */}
       <div className="glass-card rounded-xl p-5">
         <h3 className="text-sm font-semibold text-slate-200 mb-4">Портфелі</h3>
@@ -234,7 +212,7 @@ export default function Overview() {
           <div className="space-y-1">
             {portfolios.map(p => {
               const val = calcPortfolioValue(p)
-              const pnl = calcPortfolioPnl(p)
+              const pnl = (p.positions || []).reduce((s, pos) => s + calcPositionValue(pos).pnl, 0)
               return (
                 <Link key={p.id} to={`/portfolios/${p.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
                   <div>
