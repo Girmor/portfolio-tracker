@@ -199,6 +199,22 @@ function compCacheSet(key, entries) {
 }
 
 export async function getBtcHistoricalPrices() {
+  // Reuse the BTC asset cache already populated by fetchCryptoHistory when
+  // the portfolio contains BTC. Format: { entries: [['YYYY-MM-DD', price], ...] }
+  try {
+    const raw = localStorage.getItem('ph_crypto_bitcoin')
+    if (raw) {
+      const { entries } = JSON.parse(raw)
+      if (Array.isArray(entries) && entries.length > 0) {
+        return entries.map(([day, price]) => ({
+          date: new Date(day + 'T00:00:00Z').getTime(),
+          price,
+        }))
+      }
+    }
+  } catch {}
+
+  // Fallback: fetch from CoinGecko with stale cache
   const cacheKey = 'ph_btc_comparison'
   try {
     const res = await fetch(
@@ -206,7 +222,7 @@ export async function getBtcHistoricalPrices() {
     )
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    const prices = (data.prices || []).map(([timestamp, price]) => ({ date: timestamp, price }))
+    const prices = (data.prices || []).map(([ts, price]) => ({ date: ts, price }))
     if (prices.length > 0) compCacheSet(cacheKey, prices)
     return prices
   } catch {
@@ -216,23 +232,27 @@ export async function getBtcHistoricalPrices() {
 
 export async function getSpxHistoricalPrices() {
   const cacheKey = 'ph_spx_comparison'
-  const key = import.meta.env.VITE_FINNHUB_KEY
-  if (!key) return compCacheGet(cacheKey) ?? []
-  const from = Math.floor(new Date('2010-01-01').getTime() / 1000)
-  const to = Math.floor(Date.now() / 1000)
-  try {
-    const res = await fetch(
-      `https://finnhub.io/api/v1/stock/candle?symbol=SPY&resolution=D&from=${from}&to=${to}&token=${key}`
-    )
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (data.s !== 'ok') throw new Error('no data')
-    const prices = data.t.map((ts, i) => ({ date: ts * 1000, price: data.c[i] }))
-    if (prices.length > 0) compCacheSet(cacheKey, prices)
-    return prices
-  } catch {
-    return compCacheGet(cacheKey) ?? []
+  const finnhubKey = import.meta.env.VITE_FINNHUB_KEY
+
+  // Try Finnhub with a 5-year window (within free tier limits)
+  if (finnhubKey) {
+    const from = Math.floor(Date.now() / 1000) - 5 * 365 * 24 * 60 * 60
+    const to = Math.floor(Date.now() / 1000)
+    try {
+      const res = await fetch(
+        `https://finnhub.io/api/v1/stock/candle?symbol=SPY&resolution=D&from=${from}&to=${to}&token=${finnhubKey}`
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (data.s !== 'ok' || !data.t?.length) throw new Error('no data')
+      const prices = data.t.map((ts, i) => ({ date: ts * 1000, price: data.c[i] }))
+      if (prices.length > 0) compCacheSet(cacheKey, prices)
+      return prices
+    } catch {}
   }
+
+  // Fallback: stale cache
+  return compCacheGet(cacheKey) ?? []
 }
 
 export async function searchStocks(query) {
