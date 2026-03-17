@@ -1,13 +1,33 @@
 import { getCoinId } from './priceService'
 
+const TODAY = new Date().toISOString().split('T')[0]
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const { date, entries } = JSON.parse(raw)
+    if (date !== TODAY) { localStorage.removeItem(key); return null }
+    return new Map(entries)
+  } catch { return null }
+}
+
+function cacheSet(key, map) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ date: TODAY, entries: [...map] }))
+  } catch {}
+}
+
 /**
  * Fetches historical daily prices for a crypto position from CoinGecko.
  * Returns Map<'YYYY-MM-DD', number>
  */
 export async function fetchCryptoHistory(position, days) {
   const coinId = getCoinId(position)
-  // CoinGecko free tier returns errors for very large day counts on some endpoints.
-  // Use 'max' for anything over a year to get all available daily data.
+  const cacheKey = `ph_crypto_${coinId}`
+  const cached = cacheGet(cacheKey)
+  if (cached) return cached
+
   const daysParam = days > 365 ? 'max' : days
   try {
     const res = await fetch(
@@ -21,6 +41,7 @@ export async function fetchCryptoHistory(position, days) {
       const day = new Date(ts).toISOString().split('T')[0]
       map.set(day, price)
     }
+    if (map.size > 0) cacheSet(cacheKey, map)
     return map
   } catch {
     return new Map()
@@ -34,6 +55,10 @@ export async function fetchCryptoHistory(position, days) {
 export async function fetchStockHistory(ticker, fromDate) {
   const key = import.meta.env.VITE_ALPHAVANTAGE_KEY
   if (!key) return new Map()
+
+  const cacheKey = `ph_stock_${ticker}`
+  const cached = cacheGet(cacheKey)
+  if (cached) return cached
 
   try {
     const res = await fetch(
@@ -52,6 +77,7 @@ export async function fetchStockHistory(ticker, fromDate) {
       const price = parseFloat(vals['4. close'])
       if (!isNaN(price)) map.set(day, price)
     }
+    if (map.size > 0) cacheSet(cacheKey, map)
     return map
   } catch {
     return new Map()
