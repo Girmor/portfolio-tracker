@@ -268,13 +268,15 @@ export default function Budget() {
           )}
         </div>
         {monthlyTotals.length >= 2 && (
-          <div className="mt-3" style={{ height: 60 }}>
+          <div className="mt-3 [&_.recharts-surface]:bg-transparent [&_.recharts-wrapper]:bg-transparent" style={{ height: 60 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyTotals} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                 <Tooltip
                   formatter={(v) => [formatMoney(v), 'USD']}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.month ? monthLabel(payload[0].payload.month) : ''}
-                  contentStyle={tooltipStyle}
+                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0' }}
+                  wrapperStyle={{ outline: 'none' }}
+                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                 />
                 <Bar dataKey="total" radius={[2, 2, 0, 0]} maxBarSize={16}>
                   {monthlyTotals.map((entry, i) => (
