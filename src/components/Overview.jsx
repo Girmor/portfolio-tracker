@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { PieChart, Pie, Cell, Tooltip, AreaChart, Area, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, AreaChart, Area, CartesianGrid, XAxis, ResponsiveContainer } from 'recharts'
 import { Skeleton } from './ui/skeleton'
 import { formatMoney, formatPercent, pnlColor } from '../lib/formatters'
 import { usePortfoliosWithPositionsQuery } from '../hooks/usePortfoliosQuery'
@@ -67,21 +67,26 @@ export default function Overview() {
     return sum + sign * Number(b.amount)
   }, 0)
 
-  // Monthly net budget totals (assets − liabilities) for the mini sparkline
+  // Monthly net budget totals for the history chart
   const budgetMonthlyTotals = useMemo(() => {
     const map = new Map()
     for (const b of budget) {
-      const sign = b.type === 'liability' ? -1 : 1
-      const usd = b.currency === 'USD' ? sign * Number(b.amount)
-               : b.currency === 'EUR' ? sign * Number(b.amount) * 1.08
-               : sign * Number(b.amount) / 41.5
-      map.set(b.month, (map.get(b.month) || 0) + usd)
+      const prev = map.get(b.month) || { assets: 0, liabilities: 0 }
+      const usd = b.currency === 'USD' ? Number(b.amount)
+               : b.currency === 'EUR' ? Number(b.amount) * 1.08
+               : Number(b.amount) / 41.5
+      if (b.type === 'liability') prev.liabilities += usd
+      else prev.assets += usd
+      map.set(b.month, prev)
     }
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-12)
-      .map(([month, total]) => ({ month, total }))
+      .map(([month, { assets, liabilities }]) => ({ month, total: assets - liabilities, assets, liabilities }))
   }, [budget])
+
+  const MONTHS_UK = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
+                     'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень']
 
   const investmentTotal = portfolios.reduce((sum, p) => sum + calcPortfolioValue(p), 0)
   const totalInvested = portfolios.reduce((sum, p) =>
@@ -176,9 +181,9 @@ export default function Overview() {
           </div>
 
           {/* Budget card — full width */}
-          <div className="col-span-2 glass-card rounded-xl p-4 flex items-center gap-4">
+          <div className="col-span-2 glass-card rounded-xl overflow-hidden flex" style={{ minHeight: 104 }}>
             {/* Text side */}
-            <div className="min-w-0 flex-1">
+            <div className="flex flex-col justify-center p-4 shrink-0 w-56 border-r border-white/[0.06]">
               <div className="text-xs text-slate-400 mb-1">Загальний бюджет (в USD)</div>
               <div className={`text-xl font-bold ${budgetTotal >= 0 ? 'text-white' : 'text-red-400'}`}>
                 {formatMoney(budgetTotal)}
@@ -190,49 +195,72 @@ export default function Overview() {
                   else assetsByCur[b.currency] = (assetsByCur[b.currency] || 0) + Number(b.amount)
                 })
                 return (
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs">
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs">
                     {Object.entries(assetsByCur).map(([cur, total]) => (
                       <span key={`a-${cur}`} className="text-emerald-400">{cur}: {formatMoney(total, cur)}</span>
                     ))}
                     {Object.entries(liabByCur).map(([cur, total]) => (
-                      <span key={`l-${cur}`} className="text-red-400">−{cur}: {formatMoney(total, cur)}</span>
+                      <span key={`l-${cur}`} className="text-red-400">−{formatMoney(total, cur)}</span>
                     ))}
                   </div>
                 )
               })()}
               {currentMonthBudget.length === 0 && (
-                <div className="text-xs text-slate-500 mt-1">Немає даних за поточний місяць</div>
+                <div className="text-xs text-slate-500 mt-1">Немає даних</div>
               )}
             </div>
 
-            {/* Mini sparkline — only when ≥2 months of data */}
-            {budgetMonthlyTotals.length >= 2 && (
-              <div className="shrink-0 w-40" style={{ height: 52 }}>
+            {/* Chart — fills remaining width and full height */}
+            {budgetMonthlyTotals.length >= 2 ? (
+              <div className="flex-1 px-2 pt-3 pb-1 [&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={budgetMonthlyTotals} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+                  <AreaChart data={budgetMonthlyTotals} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="budgetGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={budgetTotal >= 0 ? 'rgba(52,211,153,0.4)' : 'rgba(248,113,113,0.4)'} />
+                      <linearGradient id="budgetGradOv" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={budgetTotal >= 0 ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'} />
                         <stop offset="100%" stopColor="rgba(0,0,0,0)" />
                       </linearGradient>
                     </defs>
-                    <Tooltip
-                      formatter={(v) => [formatMoney(v), 'Бюджет']}
-                      labelFormatter={(_, payload) => payload?.[0]?.payload?.month ?? ''}
-                      contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#e2e8f0', fontSize: 11 }}
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={m => {
+                        const [y, mo] = m.split('-')
+                        return `${MONTHS_UK[parseInt(mo, 10) - 1].slice(0, 3)} ${y.slice(2)}`
+                      }}
+                      tick={{ fontSize: 10, fill: '#475569' }}
+                      axisLine={false}
+                      tickLine={false}
                     />
+                    <Tooltip
+                      formatter={(v, name) => {
+                        const labels = { total: 'Нетто', assets: 'Активи', liabilities: 'Зобов\'яз.' }
+                        return [formatMoney(v), labels[name] ?? name]
+                      }}
+                      labelFormatter={(_, p) => p?.[0]?.payload?.month ? `${MONTHS_UK[parseInt(p[0].payload.month.split('-')[1], 10) - 1]} ${p[0].payload.month.split('-')[0]}` : ''}
+                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, fontSize: 11 }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      wrapperStyle={{ outline: 'none' }}
+                      cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
+                    />
+                    <Area type="monotone" dataKey="assets" stroke="rgba(52,211,153,0.4)" strokeWidth={1} fill="none" dot={false} isAnimationActive={false} activeDot={false} />
+                    <Area type="monotone" dataKey="liabilities" stroke="rgba(248,113,113,0.4)" strokeWidth={1} fill="none" dot={false} isAnimationActive={false} activeDot={false} />
                     <Area
                       type="monotone"
                       dataKey="total"
                       stroke={budgetTotal >= 0 ? '#34d399' : '#f87171'}
-                      strokeWidth={1.5}
-                      fill="url(#budgetGrad)"
+                      strokeWidth={2}
+                      fill="url(#budgetGradOv)"
                       dot={false}
                       isAnimationActive={false}
-                      activeDot={{ r: 3, stroke: '#1e293b', strokeWidth: 1.5 }}
+                      activeDot={{ r: 4, fill: budgetTotal >= 0 ? '#34d399' : '#f87171', stroke: '#0f172a', strokeWidth: 2 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-xs text-slate-600">
+                Додайте дані за ≥2 місяці
               </div>
             )}
           </div>
