@@ -270,7 +270,7 @@ export default function Budget() {
           )}
         </div>
         {monthlyTotals.length >= 2 && (
-          <div className="mt-3 [&_.recharts-surface]:bg-transparent [&_.recharts-wrapper]:bg-transparent" style={{ height: 60 }}>
+          <div className="mt-3 [&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent" style={{ height: 60 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyTotals} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                 <Tooltip
@@ -589,13 +589,13 @@ export default function Budget() {
                   </div>
                 )
               })()}
-              <div className="[&_.recharts-surface]:bg-transparent [&_.recharts-wrapper]:bg-transparent" style={{ height: 240 }}>
+              <div className="[&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent" style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
                     <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
                     <YAxis width={60} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}к`} />
-                    <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
+                    <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                     <Legend wrapperStyle={{ color: '#94a3b8' }} />
                     <Bar dataKey="Доходи"     fill="#10b981" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Доходи'     ? 1 : 0.15} />
                     <Bar dataKey="Витрати"    fill="#f97316" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Витрати'    ? 1 : 0.15} />

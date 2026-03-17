@@ -214,7 +214,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, bud
           {emptyMessage}
         </div>
       ) : (
-        <div ref={containerRef} style={{ height: 250, overflow: 'hidden' }}>
+        <div ref={containerRef} className="[&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent" style={{ height: 250, overflow: 'hidden' }}>
           {chartWidth > 0 && (
             <AreaChart width={chartWidth} height={250} data={chartData}>
               <defs>
