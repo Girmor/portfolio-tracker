@@ -42,12 +42,18 @@ export function calculateRebalance({
   // Total portfolio value after deposit/withdrawal
   const targetPortfolioValue = includedCurrentTotal + cashBalance + deposit - withdrawal
 
+  // Normalize target percentages to 100% across included assets only.
+  // When an asset is excluded its allocation is redistributed proportionally
+  // to the remaining active assets, increasing their buying power.
+  const totalIncludedPct = includedAssets.reduce((s, a) => s + (a.targetPercent || 0), 0)
+
   // Calculate raw deltas
   let results = includedAssets.map(a => {
     const currentValue = currentValues[a.symbol] ?? 0
-    const targetValue = (targetPortfolioValue * a.targetPercent) / 100
+    const normalizedPct = totalIncludedPct > 0 ? (a.targetPercent / totalIncludedPct) * 100 : 0
+    const targetValue = (targetPortfolioValue * normalizedPct) / 100
     const delta = targetValue - currentValue
-    return { ...a, currentValue, targetValue, delta }
+    return { ...a, currentValue, targetValue, delta, normalizedPct }
   })
 
   if (!allowSales) {
@@ -86,7 +92,8 @@ export function calculateRebalance({
       category: r.category,
       currentValue: r.currentValue,
       currentPct,
-      targetPct: r.targetPercent,
+      targetPct: r.normalizedPct,      // show effective (normalized) target %
+      originalTargetPct: r.targetPercent, // original template %
       targetValue: r.targetValue,
       delta: r.delta,
       units,
