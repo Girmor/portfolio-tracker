@@ -431,6 +431,7 @@ function RebalanceOverview({
   const [allowSales, setAllowSales] = useState(false)
   const [results, setResults] = useState(null)
   const [excludedSymbols, setExcludedSymbols] = useState(new Set())
+  const [cashIncluded, setCashIncluded] = useState(true)
 
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId)
 
@@ -438,6 +439,7 @@ function RebalanceOverview({
   useEffect(() => {
     setResults(null)
     setExcludedSymbols(new Set())
+    setCashIncluded(true)
   }, [selectedTemplateId, selectedPortfolioId])
 
   // Build currentValues from positions
@@ -450,13 +452,13 @@ function RebalanceOverview({
     return map
   }, [positions, prices])
 
-  function runCalculate(excl = excludedSymbols) {
+  function runCalculate(excl = excludedSymbols, cashIn = cashIncluded) {
     if (!selectedTemplate) return
     const depositAmt = Math.max(0, Number(deposit) || 0)
     const result = calculateRebalance({
       assets: selectedTemplate.assets,
       currentValues,
-      cashBalance,
+      cashBalance: cashIn ? cashBalance : 0,
       deposit: isWithdrawal ? 0 : depositAmt,
       withdrawal: isWithdrawal ? depositAmt : 0,
       allowSales,
@@ -473,8 +475,13 @@ function RebalanceOverview({
     if (next.has(symbol)) next.delete(symbol)
     else next.add(symbol)
     setExcludedSymbols(next)
-    // Pass the new set directly — no stale closure
-    if (results) runCalculate(next)
+    if (results) runCalculate(next, cashIncluded)
+  }
+
+  function toggleCash() {
+    const next = !cashIncluded
+    setCashIncluded(next)
+    if (results) runCalculate(excludedSymbols, next)
   }
 
   // Summary calculations
@@ -483,11 +490,17 @@ function RebalanceOverview({
     const totalBuy = results.filter(r => r.action === 'buy').reduce((s, r) => s + r.delta, 0)
     const totalSell = results.filter(r => r.action === 'sell').reduce((s, r) => s + Math.abs(r.delta), 0)
     const depositAmt = Math.max(0, Number(deposit) || 0)
-    const cashUsed = isWithdrawal ? -depositAmt : depositAmt
+    const depositNet = isWithdrawal ? -depositAmt : depositAmt
     const currentTotal = Object.values(currentValues).reduce((s, v) => s + v, 0) + cashBalance
-    const newBalance = currentTotal + (isWithdrawal ? -depositAmt : depositAmt)
-    return { totalBuy, totalSell, cashUsed: depositAmt, deposit: isWithdrawal ? 0 : depositAmt, withdrawal: isWithdrawal ? depositAmt : 0, newBalance, currentTotal }
-  }, [results, deposit, isWithdrawal, currentValues, cashBalance])
+    const newBalance = currentTotal + depositNet
+    const remainingCash = (cashIncluded ? cashBalance : 0) + depositNet - totalBuy + totalSell
+    return {
+      totalBuy, totalSell,
+      deposit: isWithdrawal ? 0 : depositAmt,
+      withdrawal: isWithdrawal ? depositAmt : 0,
+      newBalance, currentTotal, remainingCash,
+    }
+  }, [results, deposit, isWithdrawal, currentValues, cashBalance, cashIncluded])
 
   const canCalculate = !!selectedPortfolioId && !!selectedTemplateId
 
@@ -660,6 +673,45 @@ function RebalanceOverview({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
+                {/* Cash row */}
+                {cashBalance > 0 && (
+                  <tr className={`hover:bg-white/5 transition-colors ${!cashIncluded ? 'opacity-50' : ''}`}>
+                    <td className="py-3 px-4">
+                      <input
+                        type="checkbox"
+                        checked={cashIncluded}
+                        onChange={toggleCash}
+                        className="accent-blue-500"
+                        title={cashIncluded ? 'Виключити готівку з розрахунку' : 'Включити готівку в розрахунок'}
+                      />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-white">USD</div>
+                      <div className="text-xs text-slate-500">Готівка</div>
+                    </td>
+                    <td className="text-right py-3 px-4 text-slate-200">{formatMoney(cashBalance)}</td>
+                    <td className="text-right py-3 px-4 text-slate-400">
+                      {summary
+                        ? `${((cashBalance / (summary.currentTotal || 1)) * 100).toFixed(1)}%`
+                        : '—'}
+                    </td>
+                    <td className="text-right py-3 px-4 text-slate-400">—</td>
+                    <td className="text-right py-3 px-4">
+                      {cashIncluded
+                        ? <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-400">Пул</span>
+                        : <span className="text-xs px-2 py-0.5 rounded-md bg-white/8 text-slate-500">Виключено</span>
+                      }
+                    </td>
+                    <td className="text-right py-3 px-4 tabular-nums">
+                      {summary ? (
+                        <span className={summary.remainingCash >= 0 ? 'text-slate-300' : 'text-red-400'}>
+                          {formatMoney(summary.remainingCash)}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="text-right py-3 px-4 text-slate-500">—</td>
+                  </tr>
+                )}
                 {results.map(row => {
                   const isExcluded = row.action === 'excluded'
                   return (
