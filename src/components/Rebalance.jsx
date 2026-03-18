@@ -450,7 +450,7 @@ function RebalanceOverview({
     return map
   }, [positions, prices])
 
-  function handleCalculate() {
+  function runCalculate(excl = excludedSymbols) {
     if (!selectedTemplate) return
     const depositAmt = Math.max(0, Number(deposit) || 0)
     const result = calculateRebalance({
@@ -461,22 +461,20 @@ function RebalanceOverview({
       withdrawal: isWithdrawal ? depositAmt : 0,
       allowSales,
       prices,
-      excludedSymbols,
+      excludedSymbols: excl,
     })
     setResults(result)
   }
 
+  function handleCalculate() { runCalculate() }
+
   function toggleExcluded(symbol) {
-    setExcludedSymbols(prev => {
-      const next = new Set(prev)
-      if (next.has(symbol)) next.delete(symbol)
-      else next.add(symbol)
-      return next
-    })
-    // Recalculate immediately if we already have results
-    if (results) {
-      setTimeout(() => handleCalculate(), 0)
-    }
+    const next = new Set(excludedSymbols)
+    if (next.has(symbol)) next.delete(symbol)
+    else next.add(symbol)
+    setExcludedSymbols(next)
+    // Pass the new set directly — no stale closure
+    if (results) runCalculate(next)
   }
 
   // Summary calculations
@@ -672,10 +670,10 @@ function RebalanceOverview({
                       <td className="py-3 px-4">
                         <input
                           type="checkbox"
-                          checked={!excludedSymbols.has(row.symbol)}
+                          checked={row.action !== 'excluded'}
                           onChange={() => toggleExcluded(row.symbol)}
                           className="accent-blue-500"
-                          title={excludedSymbols.has(row.symbol) ? 'Включити в розрахунок' : 'Виключити з розрахунку'}
+                          title={row.action === 'excluded' ? 'Включити в розрахунок' : 'Виключити з розрахунку'}
                         />
                       </td>
                       <td className="py-3 px-4">
