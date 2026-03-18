@@ -4,7 +4,7 @@ import { useIsFetching } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import {
   BarChart2, Briefcase, DollarSign, ClipboardList, Download,
-  Wallet, Camera, LogOut, ChevronRight, Menu, X,
+  Wallet, Camera, LogOut, ChevronRight, Menu, X, Target,
 } from 'lucide-react'
 
 const NAV = [
@@ -21,6 +21,7 @@ const NAV = [
   },
   { to: '/budget', label: 'Бюджет', icon: Wallet },
   { to: '/snapshots', label: 'Снепшоти', icon: Camera },
+  { to: '/strategy', label: 'Стратегія', icon: Target },
 ]
 
 export default function Layout({ children }) {
