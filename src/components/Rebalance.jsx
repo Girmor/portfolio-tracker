@@ -658,7 +658,7 @@ function RebalanceOverview({
                   <th className="text-right py-2.5 px-4 text-xs font-medium text-slate-400">Ціль %</th>
                   <th className="text-right py-2.5 px-4 text-xs font-medium text-slate-400">Дія</th>
                   <th className="text-right py-2.5 px-4 text-xs font-medium text-slate-400">Сума</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-medium text-slate-400">Одиниць</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-medium text-slate-400">Акцій</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
@@ -811,7 +811,18 @@ export default function Rebalance() {
   const positions = portfolioDetail?.positions || []
   const cashBalance = Number(portfolioDetail?.portfolio?.cash_balance) || 0
 
-  const { data: prices = {} } = usePricesQuery(positions)
+  // Merge portfolio positions with template assets so we get prices for everything
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId)
+  const positionsForPricing = useMemo(() => {
+    if (!selectedTemplate) return positions
+    const portfolioTickers = new Set(positions.map(p => p.ticker))
+    const extraPositions = (selectedTemplate.assets || [])
+      .filter(a => !portfolioTickers.has(a.symbol))
+      .map(a => ({ ticker: a.symbol, type: a.category === 'crypto' ? 'crypto' : 'stock' }))
+    return [...positions, ...extraPositions]
+  }, [positions, selectedTemplate])
+
+  const { data: prices = {} } = usePricesQuery(positionsForPricing)
 
   function handleSelectPortfolio(id) {
     setSelectedPortfolioId(id || null)
