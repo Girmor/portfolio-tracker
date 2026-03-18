@@ -11,6 +11,7 @@ import Snapshots from './components/Snapshots'
 import TradeHistory from './components/TradeHistory'
 import ImportTrades from './components/ImportTrades'
 import Strategy from './components/Strategy'
+import Rebalance from './components/Rebalance'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function ProtectedRoute({ children }) {
@@ -41,6 +42,7 @@ function AppRoutes() {
               <Route path="/import" element={<ImportTrades />} />
               <Route path="/snapshots" element={<Snapshots />} />
               <Route path="/strategy" element={<Strategy />} />
+              <Route path="/rebalance" element={<Rebalance />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
