@@ -19,9 +19,15 @@ const NAV = [
       { to: '/import', label: 'Імпорт', icon: Download },
     ],
   },
+  {
+    label: 'Стратегії',
+    icon: Target,
+    children: [
+      { to: '/strategy', label: 'LW UVS&APE&FSVZO', icon: Target },
+    ],
+  },
   { to: '/budget', label: 'Бюджет', icon: Wallet },
   { to: '/snapshots', label: 'Снепшоти', icon: Camera },
-  { to: '/strategy', label: 'Стратегія', icon: Target },
 ]
 
 export default function Layout({ children }) {
