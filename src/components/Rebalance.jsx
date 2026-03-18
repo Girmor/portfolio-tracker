@@ -301,8 +301,8 @@ function TemplateEditor({ template, portfolioPositions, prices, onSave, onBack }
         </div>
       ))}
 
-      {/* Add asset section */}
-      <div className="mb-6">
+      {/* Add asset section — relative + z-10 lifts this stacking context above the save button below */}
+      <div className="mb-6 relative z-10">
         {!showAddAsset ? (
           <button
             onClick={() => setShowAddAsset(true)}
