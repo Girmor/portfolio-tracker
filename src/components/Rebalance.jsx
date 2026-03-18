@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
-import { ArrowLeft, Plus, Scale, Trash2, ChevronDown } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { ArrowLeft, Plus, Scale, Trash2 } from 'lucide-react'
 import { usePortfoliosQuery, usePortfolioDetailQuery } from '../hooks/usePortfoliosQuery'
 import { usePricesQuery } from '../hooks/usePricesQuery'
 import { formatMoney, formatNumber } from '../lib/formatters'
 import { calculateRebalance } from '../lib/rebalanceCalc'
+import { searchStocks, searchCrypto } from '../lib/priceService'
 
 // ─── localStorage helpers ────────────────────────────────────────────────────
 
@@ -82,6 +83,10 @@ function TemplateEditor({ template, portfolioPositions, prices, onSave, onBack }
   const [customTicker, setCustomTicker] = useState('')
   const [customName, setCustomName] = useState('')
   const [customCategory, setCustomCategory] = useState('stocks')
+  const [suggestions, setSuggestions] = useState([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchTimerRef = useRef(null)
 
   const totalPct = assets.reduce((s, a) => s + Number(a.targetPercent || 0), 0)
   const remaining = 100 - totalPct
@@ -106,6 +111,28 @@ function TemplateEditor({ template, portfolioPositions, prices, onSave, onBack }
     }])
   }
 
+  function handleTickerInput(value) {
+    setCustomTicker(value.toUpperCase())
+    setCustomName('')
+    setShowSuggestions(true)
+    clearTimeout(searchTimerRef.current)
+    if (value.length < 1) { setSuggestions([]); return }
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchLoading(true)
+      const [stocks, crypto] = await Promise.all([searchStocks(value), searchCrypto(value)])
+      setSuggestions([...stocks, ...crypto])
+      setSearchLoading(false)
+    }, 300)
+  }
+
+  function selectSuggestion(item) {
+    setCustomTicker(item.ticker)
+    setCustomName(item.name)
+    setCustomCategory(item.type === 'crypto' ? 'crypto' : 'stocks')
+    setSuggestions([])
+    setShowSuggestions(false)
+  }
+
   function addCustomAsset() {
     const ticker = customTicker.trim().toUpperCase()
     if (!ticker) return
@@ -120,6 +147,7 @@ function TemplateEditor({ template, portfolioPositions, prices, onSave, onBack }
     setCustomTicker('')
     setCustomName('')
     setCustomCategory('stocks')
+    setSuggestions([])
     setShowAddAsset(false)
   }
 
@@ -304,25 +332,45 @@ function TemplateEditor({ template, portfolioPositions, prices, onSave, onBack }
             )}
             <div className="text-xs text-slate-500 mb-2">Або вручну:</div>
             <div className="flex gap-2 items-end flex-wrap">
-              <div>
+              <div className="relative">
                 <input
                   type="text"
+                  autoComplete="off"
                   value={customTicker}
-                  onChange={e => setCustomTicker(e.target.value.toUpperCase())}
-                  className="glass-input w-24"
-                  placeholder="Тикер"
-                />
-              </div>
-              <div>
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
+                  onChange={e => handleTickerInput(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   className="glass-input w-40"
-                  placeholder="Назва (опц.)"
+                  placeholder="Пошук активу..."
                 />
+                {searchLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">...</div>
+                )}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute z-50 top-full left-0 mt-1 w-72 glass-modal rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {suggestions.map((item, i) => (
+                      <button
+                        key={`${item.ticker}-${i}`}
+                        type="button"
+                        onMouseDown={() => selectSuggestion(item)}
+                        className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center justify-between text-sm border-b border-white/[0.06] last:border-0"
+                      >
+                        <div>
+                          <span className="font-medium text-white">{item.ticker}</span>
+                          <span className="text-slate-400 ml-2 text-xs">{item.name}</span>
+                        </div>
+                        {item.type && <span className="text-xs text-slate-500 shrink-0 ml-2">{item.type}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {customName && (
+                  <div className="absolute left-0 top-full mt-1 text-xs text-emerald-400 whitespace-nowrap">
+                    {customTicker} — {customName}
+                  </div>
+                )}
               </div>
-              <div>
+              <div className="mt-5">
                 <select
                   value={customCategory}
                   onChange={e => setCustomCategory(e.target.value)}
@@ -333,10 +381,10 @@ function TemplateEditor({ template, portfolioPositions, prices, onSave, onBack }
                   ))}
                 </select>
               </div>
-              <button onClick={addCustomAsset} className="btn btn-primary text-sm">
+              <button onClick={addCustomAsset} className="btn btn-primary text-sm mt-5">
                 Додати
               </button>
-              <button onClick={() => setShowAddAsset(false)} className="btn btn-ghost text-sm">
+              <button onClick={() => setShowAddAsset(false)} className="btn btn-ghost text-sm mt-5">
                 Скасувати
               </button>
             </div>
