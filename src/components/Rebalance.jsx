@@ -734,10 +734,19 @@ function RebalanceOverview({
                       </td>
                       <td className="text-right py-3 px-4 text-slate-200">{formatMoney(row.currentValue)}</td>
                       <td className="text-right py-3 px-4 text-slate-400">{row.currentPct.toFixed(1)}%</td>
-                      <td className="text-right py-3 px-4 text-slate-400">
-                        {isExcluded
-                          ? `${row.originalTargetPct ?? row.targetPct}%`
-                          : `${(row.originalTargetPct ?? row.targetPct)}%`}
+                      <td className="text-right py-3 px-4">
+                        {isExcluded ? (
+                          <span className="text-slate-500">{row.originalTargetPct ?? row.targetPct}%</span>
+                        ) : (
+                          <span
+                            className="text-slate-300 tabular-nums"
+                            title={row.originalTargetPct != null && Math.abs(row.originalTargetPct - row.targetPct) > 0.05
+                              ? `Шаблон: ${row.originalTargetPct}% → ефективно: ${row.targetPct.toFixed(1)}% (перерозподіл виключених активів)`
+                              : undefined}
+                          >
+                            {row.targetPct.toFixed(1)}%
+                          </span>
+                        )}
                       </td>
                       <td className="text-right py-3 px-4">
                         {isExcluded ? (
