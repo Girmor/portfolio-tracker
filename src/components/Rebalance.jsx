@@ -537,10 +537,10 @@ function RebalanceOverview({
               <div
                 key={t.id}
                 onClick={() => onSelectTemplate(t.id === selectedTemplateId ? null : t.id)}
-                className={`glass-card rounded-xl p-4 cursor-pointer w-52 border transition-all ${
+                className={`glass-card rounded-xl p-4 cursor-pointer w-52 border-2 transition-all ${
                   t.id === selectedTemplateId
-                    ? 'border-blue-500/50 bg-blue-500/8'
-                    : 'border-white/8 hover:border-white/20'
+                    ? 'border-blue-500 bg-blue-500/15 shadow-[0_0_0_1px_rgba(59,130,246,0.3)]'
+                    : 'border-white/10 hover:border-white/25'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
