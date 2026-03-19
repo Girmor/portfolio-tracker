@@ -737,15 +737,13 @@ function RebalanceOverview({
                       <td className="text-right py-3 px-4">
                         {isExcluded ? (
                           <span className="text-slate-500">{row.originalTargetPct ?? row.targetPct}%</span>
-                        ) : (
-                          <span
-                            className="text-slate-300 tabular-nums"
-                            title={row.originalTargetPct != null && Math.abs(row.originalTargetPct - row.targetPct) > 0.05
-                              ? `Шаблон: ${row.originalTargetPct}% → ефективно: ${row.targetPct.toFixed(1)}% (перерозподіл виключених активів)`
-                              : undefined}
-                          >
-                            {row.targetPct.toFixed(1)}%
+                        ) : row.originalTargetPct != null && Math.abs(row.originalTargetPct - row.targetPct) > 0.05 ? (
+                          <span className="tabular-nums flex items-center justify-end gap-1.5">
+                            <span className="line-through text-slate-500 text-xs">{row.originalTargetPct}%</span>
+                            <span className="text-blue-400 font-medium">{row.targetPct.toFixed(1)}%</span>
                           </span>
+                        ) : (
+                          <span className="text-slate-300 tabular-nums">{row.targetPct.toFixed(1)}%</span>
                         )}
                       </td>
                       <td className="text-right py-3 px-4">
