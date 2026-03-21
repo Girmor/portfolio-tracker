@@ -50,32 +50,45 @@ export async function fetchCryptoHistory(position, _days) {
  * Returns Map<'YYYY-MM-DD', number>
  */
 export async function fetchStockHistory(ticker, fromDate) {
-  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY
-  if (!key) return new Map()
-
   const cacheKey = `ph_stock_${ticker}`
-  try {
-    const res = await fetch(
-      `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY` +
-      `&symbol=${encodeURIComponent(ticker)}&outputsize=full&apikey=${key}`
-    )
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json = await res.json()
-    const series = json['Time Series (Daily)']
-    if (!series) throw new Error('no series')
 
-    const from = fromDate ? fromDate.split('T')[0] : null
-    const map = new Map()
-    for (const [day, vals] of Object.entries(series)) {
-      if (from && day < from) continue
-      const price = parseFloat(vals['4. close'])
-      if (!isNaN(price)) map.set(day, price)
-    }
-    if (map.size > 0) cacheSet(cacheKey, map)
-    return map
-  } catch {
-    return cacheGet(cacheKey) ?? new Map()
+  // Cache-first: historical daily prices are immutable, no need to re-fetch
+  const cached = cacheGet(cacheKey)
+  if (cached?.size > 0) return cached
+
+  // Try primary key, then fallback key
+  const keys = [
+    import.meta.env.VITE_ALPHAVANTAGE_KEY,
+    import.meta.env.VITE_ALPHAVANTAGE_KEY2,
+  ].filter(Boolean)
+  if (!keys.length) return new Map()
+
+  for (const key of keys) {
+    try {
+      const res = await fetch(
+        `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY` +
+        `&symbol=${encodeURIComponent(ticker)}&outputsize=full&apikey=${key}`
+      )
+      if (!res.ok) continue
+      const json = await res.json()
+      const series = json['Time Series (Daily)']
+      if (!series) continue
+
+      const from = fromDate ? fromDate.split('T')[0] : null
+      const map = new Map()
+      for (const [day, vals] of Object.entries(series)) {
+        if (from && day < from) continue
+        const price = parseFloat(vals['4. close'])
+        if (!isNaN(price)) map.set(day, price)
+      }
+      if (map.size > 0) {
+        cacheSet(cacheKey, map)
+        return map
+      }
+    } catch { /* try next key */ }
   }
+
+  return new Map()
 }
 
 /**
