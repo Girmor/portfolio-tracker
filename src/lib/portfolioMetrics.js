@@ -30,6 +30,7 @@ export async function fetchOverview(ticker) {
     )
     if (!res.ok) return null
     const json = await res.json()
+    console.log('[metrics] AV response for', ticker, '→ Symbol:', json.Symbol, 'PE:', json.PERatio, 'Beta:', json.Beta, 'Info:', json.Information?.substring(0, 60))
     // Rate-limited or invalid responses lack Symbol field
     if (!json.Symbol) return null
 
