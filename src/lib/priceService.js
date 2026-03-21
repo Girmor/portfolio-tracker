@@ -273,25 +273,6 @@ export async function getSpxHistoricalPrices() {
   const cached = compCacheGet(cacheKey)
   if (cached?.length) return cached
 
-  // Last resort: Yahoo Finance chart API (unofficial, no key, CORS-friendly)
-  try {
-    const res = await fetch(
-      'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=5y'
-    )
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json = await res.json()
-    const result = json.chart?.result?.[0]
-    if (!result) throw new Error('no result')
-    const timestamps = result.timestamp || []
-    const closes = result.indicators?.adjclose?.[0]?.adjclose
-                ?? result.indicators?.quote?.[0]?.close
-                ?? []
-    const prices = timestamps
-      .map((ts, i) => ({ date: ts * 1000, price: closes[i] }))
-      .filter(p => p.price != null && isFinite(p.price))
-    if (prices.length > 0) { compCacheSet(cacheKey, prices); return prices }
-  } catch {}
-
   return []
 }
 

@@ -3,26 +3,24 @@ import { corsHeaders, corsResponse, jsonResponse, errorResponse } from '../_shar
 const FINNHUB_KEY = Deno.env.get('FINNHUB_KEY') ?? ''
 
 /**
- * Fetch P/E and Beta for a ticker from Yahoo Finance quoteSummary (server-side).
+ * Fetch P/E and Beta for a ticker via Finnhub /stock/metric (server-side).
  */
-async function fetchYahooMetrics(ticker: string): Promise<{ pe: number | null; beta: number | null }> {
+async function fetchFinnhubMetrics(ticker: string): Promise<{ pe: number | null; beta: number | null }> {
+  if (!FINNHUB_KEY) return { pe: null, beta: null }
   try {
-    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=defaultKeyStatistics,summaryDetail`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    })
+    const res = await fetch(
+      `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${FINNHUB_KEY}`
+    )
     if (!res.ok) return { pe: null, beta: null }
     const json = await res.json()
-    const r = json.quoteSummary?.result?.[0]
-    if (!r) return { pe: null, beta: null }
+    const m = json.metric
+    if (!m || typeof m !== 'object') return { pe: null, beta: null }
 
-    const ks = r.defaultKeyStatistics
-    const sd = r.summaryDetail
-
-    const peRaw = sd?.trailingPE?.raw ?? ks?.forwardPE?.raw ?? null
-    const pe = peRaw != null && isFinite(peRaw) ? peRaw : null
-    const betaRaw = ks?.beta?.raw ?? null
-    const beta = betaRaw != null && isFinite(betaRaw) ? betaRaw : null
+    const peRaw = m.peTTM ?? m.peBasicExclExtraTTM ?? m.peNormalizedAnnual ?? null
+    const pe = peRaw != null && isFinite(Number(peRaw)) && Number(peRaw) > 0 && Number(peRaw) < 500
+      ? Number(peRaw) : null
+    const betaRaw = m.beta ?? null
+    const beta = betaRaw != null && isFinite(Number(betaRaw)) ? Number(betaRaw) : null
 
     return { pe, beta }
   } catch {
@@ -31,20 +29,20 @@ async function fetchYahooMetrics(ticker: string): Promise<{ pe: number | null; b
 }
 
 /**
- * Fetch SPY 5-year daily candles from Finnhub.
+ * Fetch SPY 2-year daily candles from Finnhub.
  */
 async function fetchSpyHistory(): Promise<Array<{ date: number; price: number }>> {
   if (!FINNHUB_KEY) return []
   try {
-    const from = Math.floor(Date.now() / 1000) - 5 * 365 * 24 * 60 * 60
     const to = Math.floor(Date.now() / 1000)
+    const from = to - 2 * 365 * 24 * 60 * 60  // 2 years
     const res = await fetch(
       `https://finnhub.io/api/v1/stock/candle?symbol=SPY&resolution=D&from=${from}&to=${to}&token=${FINNHUB_KEY}`
     )
     if (!res.ok) return []
     const data = await res.json()
     if (data.s !== 'ok' || !data.t?.length) return []
-    return data.t.map((ts: number, i: number) => ({ date: ts * 1000, price: data.c[i] }))
+    return (data.t as number[]).map((ts: number, i: number) => ({ date: ts * 1000, price: data.c[i] }))
   } catch {
     return []
   }
@@ -59,7 +57,7 @@ Deno.serve(async (req: Request) => {
     const [metricsResults, spyPrices] = await Promise.all([
       Promise.all(
         (tickers as string[]).map(async (ticker) => {
-          const m = await fetchYahooMetrics(ticker)
+          const m = await fetchFinnhubMetrics(ticker)
           return [ticker, m] as [string, typeof m]
         })
       ),

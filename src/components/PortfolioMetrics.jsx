@@ -152,29 +152,23 @@ export default function PortfolioMetrics({ positions, prices }) {
       )]
       const hasStocks = stockTickers.length > 0
 
-      // Single edge-function call returns metrics + SPY prices (server-side, no CORS)
-      const [fundamentalsResult, spyFallbackResult] = await Promise.allSettled([
-        fetchFundamentals(stockTickers, true),
-        getSpxHistoricalPrices(), // localStorage cache or Finnhub direct as backup
-      ])
+      // Single edge-function call: metrics (Finnhub) + SPY candles (Finnhub), server-side
+      const fundamentalsResult = await fetchFundamentals(stockTickers, true)
 
       if (cancelled) return
 
       const overviewData = {}
       let overviewSucceeded = false
-      let spyPrices = []
+      let spyPrices = fundamentalsResult.spyPrices ?? []
 
-      if (fundamentalsResult.status === 'fulfilled') {
-        const { metrics, spyPrices: edgeSpyPrices } = fundamentalsResult.value
-        for (const [ticker, data] of Object.entries(metrics)) {
-          if (data) { overviewData[ticker] = data; overviewSucceeded = true }
-        }
-        if (edgeSpyPrices?.length) spyPrices = edgeSpyPrices
+      for (const [ticker, data] of Object.entries(fundamentalsResult.metrics ?? {})) {
+        if (data) { overviewData[ticker] = data; overviewSucceeded = true }
       }
 
-      // Fallback: use directly-fetched SPY prices if edge function didn't return them
-      if (!spyPrices.length && spyFallbackResult.status === 'fulfilled') {
-        spyPrices = spyFallbackResult.value ?? []
+      // Fallback: try localStorage cache for SPY (populated by PortfolioHistoryChart)
+      if (!spyPrices.length) {
+        const cached = await getSpxHistoricalPrices()
+        spyPrices = cached ?? []
       }
 
       const spyLoaded = spyPrices.length > 0
