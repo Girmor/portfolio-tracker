@@ -275,27 +275,58 @@ export async function getSpxHistoricalPrices() {
 }
 
 /**
- * Fetch dividend history for a stock ticker from Finnhub.
+ * Fetch dividend history for a stock ticker from Alpha Vantage.
  * Returns { freq, history: [{date, amount}] } or null on failure.
- * freq: 1=annual, 2=semiannual, 4=quarterly, 12=monthly
+ * freq: 1=annual, 2=semiannual, 4=quarterly, 12=monthly (derived from date gaps)
  */
 export async function fetchDividendHistory(ticker) {
-  const key = import.meta.env.VITE_FINNHUB_KEY
+  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY
   if (!key) return null
-  const from = `${new Date().getFullYear() - 5}-01-01`
-  const to = new Date().toISOString().split('T')[0]
+
+  // Session cache to avoid hitting rate limits on repeated renders
+  const cacheKey = `div_meta_${ticker}`
+  try {
+    const cached = sessionStorage.getItem(cacheKey)
+    if (cached) return JSON.parse(cached)
+  } catch {}
+
   try {
     const res = await fetch(
-      `https://finnhub.io/api/v1/stock/dividend2?symbol=${encodeURIComponent(ticker)}&from=${from}&to=${to}&token=${key}`
+      `https://www.alphavantage.co/query?function=DIVIDENDS&symbol=${encodeURIComponent(ticker)}&apikey=${key}`
     )
     if (!res.ok) return null
     const json = await res.json()
     const records = json?.data
     if (!Array.isArray(records) || records.length === 0) return null
-    const sorted = [...records].sort((a, b) => new Date(a.date) - new Date(b.date))
-    const freq = sorted[sorted.length - 1]?.freq ?? null
-    const history = sorted.map(r => ({ date: r.date, amount: Number(r.amount) }))
-    return { freq, history }
+
+    // AV returns newest-first; sort ascending by date
+    const sorted = [...records]
+      .filter(r => r.ex_dividend_date && r.ex_dividend_date !== 'None')
+      .sort((a, b) => new Date(a.ex_dividend_date) - new Date(b.ex_dividend_date))
+
+    if (sorted.length === 0) return null
+
+    // Derive frequency from median gap between consecutive payments
+    let freq = null
+    if (sorted.length >= 2) {
+      const gaps = []
+      for (let i = 1; i < sorted.length; i++) {
+        const diff = (new Date(sorted[i].ex_dividend_date) - new Date(sorted[i - 1].ex_dividend_date)) / (1000 * 60 * 60 * 24)
+        gaps.push(diff)
+      }
+      gaps.sort((a, b) => a - b)
+      const median = gaps[Math.floor(gaps.length / 2)]
+      if (median < 45)       freq = 12  // monthly
+      else if (median < 120) freq = 4   // quarterly
+      else if (median < 240) freq = 2   // semiannual
+      else                   freq = 1   // annual
+    }
+
+    const history = sorted.map(r => ({ date: r.ex_dividend_date, amount: Number(r.amount) }))
+    const result = { freq, history }
+
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)) } catch {}
+    return result
   } catch {
     return null
   }
