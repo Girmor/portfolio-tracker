@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { getSpxHistoricalPrices } from '../lib/priceService'
+import { fetchStockHistory } from '../lib/historicalPrices'
 import {
   fetchFundamentals,
+  fetchSpyPrices,
   computePE,
   computeBeta,
   computeTWR,
@@ -152,29 +153,37 @@ export default function PortfolioMetrics({ positions, prices }) {
       )]
       const hasStocks = stockTickers.length > 0
 
-      // Single edge-function call: metrics (Finnhub) + SPY candles (Finnhub), server-side
-      const fundamentalsResult = await fetchFundamentals(stockTickers, true)
+      // Fetch in parallel: P/E via edge function + SPY history + ticker histories for beta
+      const [overviewData, spyPrices, ...tickerHistoryResults] = await Promise.all([
+        fetchFundamentals(stockTickers),
+        fetchSpyPrices(),
+        ...stockTickers.map(t => fetchStockHistory(t).then(h => [t, h])),
+      ])
 
       if (cancelled) return
 
-      const overviewData = {}
-      let overviewSucceeded = false
-      let spyPrices = fundamentalsResult.spyPrices ?? []
-
-      for (const [ticker, data] of Object.entries(fundamentalsResult.metrics ?? {})) {
-        if (data) { overviewData[ticker] = data; overviewSucceeded = true }
+      // Build ticker history map for beta computation
+      const histories = {}
+      for (const result of tickerHistoryResults) {
+        if (result) {
+          const [ticker, histMap] = result
+          if (histMap?.size) histories[ticker] = histMap
+        }
       }
 
-      // Fallback: try localStorage cache for SPY (populated by PortfolioHistoryChart)
-      if (!spyPrices.length) {
-        const cached = await getSpxHistoricalPrices()
-        spyPrices = cached ?? []
-      }
+      // SPY as Map for beta computation
+      const spyMap = new Map(
+        spyPrices.map(({ date, price }) => {
+          const day = new Date(date).toISOString().split('T')[0]
+          return [day, price]
+        })
+      )
 
+      const overviewSucceeded = Object.keys(overviewData).length > 0
       const spyLoaded = spyPrices.length > 0
 
       const pe = computePE(positions, prices, overviewData)
-      const beta = computeBeta(positions, prices, overviewData)
+      const beta = computeBeta(positions, prices, histories, spyMap)
       const { twr, annualizedReturn, startDate } = computeTWR(positions, prices)
 
       let spyPeriodReturn = null
