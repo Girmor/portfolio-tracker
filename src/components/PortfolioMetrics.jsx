@@ -153,6 +153,7 @@ export default function PortfolioMetrics({ positions, prices }) {
           .filter(p => p.type === 'stock')
           .map(p => p.ticker)
       )]
+      console.log('[metrics] positions:', positions.map(p => `${p.ticker}(${p.type})`), 'stockTickers:', stockTickers)
 
       const [overviewResults, spyResult] = await Promise.allSettled([
         Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v]))),

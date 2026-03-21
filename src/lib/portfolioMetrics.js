@@ -13,6 +13,7 @@ const RISK_FREE = 0.043 // US 5-year Treasury approximation
 export async function fetchOverview(ticker) {
   // Use dedicated second key for metrics to avoid sharing quota with history/dividends
   const key = import.meta.env.VITE_ALPHAVANTAGE_KEY2 || import.meta.env.VITE_ALPHAVANTAGE_KEY
+  console.log('[metrics] fetchOverview', ticker, 'key present:', !!key, 'KEY2:', !!import.meta.env.VITE_ALPHAVANTAGE_KEY2)
   if (!key) return null
 
   // Use key-specific cache prefix so KEY1/KEY2 don't share stale entries
