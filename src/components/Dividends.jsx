@@ -12,10 +12,11 @@ import {
 import { formatMoney, formatDate } from '../lib/formatters'
 import { useDividendsQuery, useCreateDividendMutation, useDeleteDividendMutation } from '../hooks/useDividendsQuery'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell,
 } from 'recharts'
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
+import { buildForecast } from '../lib/dividendForecast'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 const MONTHS = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру']
@@ -38,10 +39,119 @@ const tooltipStyle = {
   color: '#e2e8f0',
 }
 
+function ForecastTab({ dividends }) {
+  const forecast = useMemo(() => buildForecast(dividends), [dividends])
+  const { trailing12M, forward12M, monthlyRunRate, growthPct, series, perTicker } = forecast
+
+  if (dividends.length === 0) {
+    return (
+      <div className="text-center py-16 text-slate-400">
+        <p className="text-lg">Додайте дивідендні виплати для побудови прогнозу</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="glass-card rounded-xl p-5">
+          <div className="text-sm text-slate-400 mb-1">Прогноз (12 місяців)</div>
+          <div className="text-2xl font-bold text-indigo-400">{formatMoney(forward12M)} / рік</div>
+          <div className="text-sm text-slate-400 mt-1">{formatMoney(monthlyRunRate)} / місяць</div>
+        </div>
+        <div className="glass-card rounded-xl p-5">
+          <div className="text-sm text-slate-400 mb-1">Trailing 12M (факт)</div>
+          <div className="text-2xl font-bold text-green-400">{formatMoney(trailing12M)}</div>
+          <div className="text-sm text-slate-500 mt-1">отримано за останній рік</div>
+        </div>
+        <div className="glass-card rounded-xl p-5">
+          <div className="text-sm text-slate-400 mb-1">YoY ріст</div>
+          {growthPct !== null ? (
+            <div className={`text-2xl font-bold ${growthPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {growthPct >= 0 ? '▲' : '▼'} {Math.abs(growthPct).toFixed(1)}%
+            </div>
+          ) : (
+            <div className="text-2xl font-bold text-slate-500">—</div>
+          )}
+          <div className="text-sm text-slate-500 mt-1">прогноз vs факт</div>
+        </div>
+      </div>
+
+      {/* Combined 24-month chart */}
+      <div className="glass-card rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-slate-200 mb-4">Дивіденди: факт + прогноз (24 місяці)</h3>
+        <div style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={series} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} interval={1} />
+              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(value, name) => [formatMoney(value), name]}
+                labelFormatter={label => label}
+              />
+              <Legend
+                formatter={value => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{value}</span>}
+              />
+              <Bar dataKey="actual" name="Факт" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={36} />
+              <Bar dataKey="forecast" name="Прогноз" fill="#818cf8" opacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={36} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-xs text-slate-500 mt-3">
+          Прогноз є оцінкою на основі історичних виплат. Майбутні дивіденди не гарантовані.
+        </p>
+      </div>
+
+      {/* Per-ticker breakdown */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/10 bg-white/5">
+              <th className="py-3 px-4 text-left font-medium text-slate-400">Тікер</th>
+              <th className="py-3 px-4 text-left font-medium text-slate-400">Частота</th>
+              <th className="py-3 px-4 text-right font-medium text-slate-400">Середня виплата</th>
+              <th className="py-3 px-4 text-right font-medium text-slate-400">Прогноз / рік</th>
+              <th className="py-3 px-4 text-right font-medium text-slate-400">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {perTicker.map(t => {
+              const annual = t.forecastEvents.reduce((s, e) => s + e.amount, 0)
+              const pct = forward12M > 0 ? (annual / forward12M * 100).toFixed(1) : '0'
+              return (
+                <tr key={t.ticker} className="border-b border-white/[0.06] hover:bg-white/5">
+                  <td className="py-3 px-4 font-medium text-white">{t.ticker}</td>
+                  <td className="py-3 px-4 text-slate-300">{t.freqLabel}</td>
+                  <td className="py-3 px-4 text-right text-slate-300">
+                    {t.frequency === 'unknown' ? '—' : formatMoney(t.avgPayment)}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    {t.frequency === 'unknown'
+                      ? <span className="text-slate-500">Недостатньо даних</span>
+                      : <span className="text-indigo-400 font-medium">{formatMoney(annual)}</span>
+                    }
+                  </td>
+                  <td className="py-3 px-4 text-right text-slate-400">
+                    {t.frequency === 'unknown' ? '—' : `${pct}%`}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function Dividends() {
   const [showForm, setShowForm] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [sorting, setSorting] = useState([{ id: 'date', desc: true }])
+  const [activeTab, setActiveTab] = useState('history')
 
   const { data: dividends = [], isLoading } = useDividendsQuery()
   const createDividend = useCreateDividendMutation()
@@ -190,15 +300,37 @@ export default function Dividends() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-white">Дивіденди та доходи</h2>
+        {activeTab === 'history' && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="btn btn-primary"
+          >
+            + Додати дохід
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex bg-white/8 rounded-lg p-0.5 w-fit mb-5">
         <button
-          onClick={() => setShowForm(true)}
-          className="btn btn-primary"
+          onClick={() => setActiveTab('history')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'history' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}
         >
-          + Додати дохід
+          Виплати
+        </button>
+        <button
+          onClick={() => setActiveTab('forecast')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'forecast' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          Прогноз
         </button>
       </div>
+
+      {activeTab === 'forecast' && <ForecastTab dividends={dividends} />}
+
+      {activeTab === 'history' && <>
 
       {/* Year selector */}
       <div className="flex items-center gap-3 mb-5">
@@ -418,6 +550,8 @@ export default function Dividends() {
           </table>
         </div>
       )}
+
+      </>}
     </div>
   )
 }
