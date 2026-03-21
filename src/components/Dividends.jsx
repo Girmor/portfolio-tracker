@@ -443,13 +443,14 @@ export default function Dividends() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 glass-card rounded-xl p-5">
             <h3 className="text-sm font-semibold text-slate-200 mb-4">Помісячні дивіденди — {selectedYear}</h3>
-            <div style={{ height: 200 }}>
+            <div style={{ height: 230 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <BarChart data={monthlyData} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
                   <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
                   <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
                   <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     formatter={(v) => [formatMoney(v), 'Дивіденди']}
                     labelFormatter={(label, payload) => {
                       if (payload?.[0]) {
@@ -459,11 +460,13 @@ export default function Dividends() {
                       return label
                     }}
                     contentStyle={tooltipStyle}
+                    labelStyle={{ color: '#e2e8f0', fontWeight: 600 }}
                   />
                   <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={48}>
                     {monthlyData.map((entry, i) => (
                       <Cell key={i} fill={entry.amount > 0 ? '#10b981' : 'transparent'} />
                     ))}
+                    <LabelList dataKey="amount" position="top" formatter={v => v > 0 ? `$${Math.round(v)}` : ''} style={{ fill: '#94a3b8', fontSize: 11 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
