@@ -53,7 +53,7 @@ const budgetSchema = z.object({
   label: z.string().min(1, "Назва обов'язкова"),
   currency: z.enum(['UAH', 'USD', 'EUR']),
   amount: z.coerce.number().min(0, 'Сума має бути >= 0'),
-  type: z.enum(['asset', 'liability']),
+  type: z.enum(['asset', 'liability', 'investment']),
 })
 
 const cashflowSchema = z.object({
@@ -223,6 +223,7 @@ export default function Budget() {
   const filteredItems = items.filter(i => i.month === selectedMonth)
   const assets = filteredItems.filter(i => (i.type || 'asset') === 'asset')
   const liabilities = filteredItems.filter(i => i.type === 'liability')
+  const investments = filteredItems.filter(i => i.type === 'investment')
 
   function groupByCurrency(list) {
     const g = { UAH: [], USD: [], EUR: [] }
@@ -240,10 +241,13 @@ export default function Budget() {
 
   const assetGrouped = groupByCurrency(assets)
   const liabilityGrouped = groupByCurrency(liabilities)
+  const investmentGrouped = groupByCurrency(investments)
   const assetTotals = sumByCurrency(assets)
   const liabilityTotals = sumByCurrency(liabilities)
+  const investmentTotals = sumByCurrency(investments)
   const assetUsd = toUsd(assetTotals)
   const liabilityUsd = toUsd(liabilityTotals)
+  const investmentUsd = toUsd(investmentTotals)
   const totalUsdForSelectedMonth = assetUsd - liabilityUsd
 
   // Monthly totals for history chart (all items, not filtered)
@@ -287,6 +291,12 @@ export default function Budget() {
             className="btn btn-ghost border border-red-500/40 text-red-400 hover:bg-red-500/10"
           >
             + Зобов'язання
+          </button>
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); rsBudget({ label: '', currency: 'UAH', amount: '', type: 'investment' }) }}
+            className="btn btn-ghost border border-blue-500/40 text-blue-400 hover:bg-blue-500/10"
+          >
+            + Інвестиції
           </button>
         </div>
       </div>
@@ -410,7 +420,7 @@ export default function Budget() {
         <form onSubmit={hsBudget(onBudgetSubmit)} className="glass-card rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">
-              {editingId ? 'Редагувати' : (wBudget('type') === 'liability' ? 'Нове зобов\'язання' : 'Новий рахунок')}
+              {editingId ? 'Редагувати' : (wBudget('type') === 'liability' ? 'Нове зобов\'язання' : wBudget('type') === 'investment' ? 'Нова інвестиція' : 'Новий рахунок')}
             </h3>
             <div className="flex bg-white/8 rounded-lg p-0.5">
               <button type="button"
@@ -421,6 +431,10 @@ export default function Budget() {
                 onClick={() => svBudget('type', 'liability')}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${wBudget('type') === 'liability' ? 'bg-red-500/20 text-red-400' : 'text-slate-400 hover:text-slate-200'}`}
               >Зобов'язання</button>
+              <button type="button"
+                onClick={() => svBudget('type', 'investment')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${wBudget('type') === 'investment' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-slate-200'}`}
+              >Інвестиція</button>
             </div>
           </div>
           <div className="text-xs text-slate-400 mb-3">Місяць: {monthLabel(selectedMonth)}</div>
@@ -527,6 +541,46 @@ export default function Budget() {
                             onClick={() => handleUpdateAmount(item)}
                           >
                             −{formatMoney(item.amount, item.currency)}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEditBudget(item)} className="text-slate-500 hover:text-blue-400 text-xs px-1 transition-colors">Ред.</button>
+                          <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 text-xs px-1 transition-colors">Вид.</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Investments section */}
+      {investments.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wide">Інвестиції</h3>
+            <span className="text-xs text-slate-500">{formatMoney(investmentUsd)}</span>
+          </div>
+          {Object.entries(investmentGrouped).map(([currency, list]) =>
+            list.length > 0 && (
+              <div key={currency} className="mb-4">
+                <div className="text-xs text-slate-500 mb-2">
+                  {CURRENCY_ICONS[currency]} {currency} — {formatMoney(investmentTotals[currency] || 0, currency)}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                  {list.map(item => (
+                    <div key={item.id} className="glass-card rounded-xl p-3 border border-blue-500/20 hover:bg-blue-500/5 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="text-sm text-slate-200">{item.label}</div>
+                          <div
+                            className="text-base font-bold text-blue-400 mt-0.5 cursor-pointer hover:text-blue-300 transition-colors"
+                            onClick={() => handleUpdateAmount(item)}
+                          >
+                            {formatMoney(item.amount, item.currency)}
                           </div>
                         </div>
                         <div className="flex gap-1">
