@@ -147,40 +147,42 @@ export default function PortfolioMetrics({ positions, prices }) {
     async function load() {
       setLoading(true)
 
-      // 1. Fetch Alpha Vantage OVERVIEW for each unique stock ticker
       const stockTickers = [...new Set(
-        positions
-          .filter(p => p.type === 'stock')
-          .map(p => p.ticker)
+        positions.filter(p => p.type === 'stock').map(p => p.ticker)
       )]
+      const hasStocks = stockTickers.length > 0
 
       const [overviewResults, spyResult] = await Promise.allSettled([
-        Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v]))),
+        hasStocks
+          ? Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v])))
+          : Promise.resolve([]),
         getSpxHistoricalPrices(),
       ])
 
       if (cancelled) return
 
       const overviewData = {}
+      let overviewSucceeded = false
       if (overviewResults.status === 'fulfilled') {
         for (const r of overviewResults.value) {
           if (r.status === 'fulfilled' && r.value) {
             const [ticker, data] = r.value
-            if (data) overviewData[ticker] = data
+            if (data) { overviewData[ticker] = data; overviewSucceeded = true }
           }
         }
       }
 
-      const spyPrices = spyResult.status === 'fulfilled' ? spyResult.value : []
+      const spyPrices = spyResult.status === 'fulfilled' ? (spyResult.value ?? []) : []
+      const spyLoaded = spyPrices.length > 0
 
-      // 2. Compute metrics
+      console.debug('[PortfolioMetrics] stockTickers:', stockTickers, 'overviewData:', overviewData, 'spyPrices count:', spyPrices.length)
+
       const pe = computePE(positions, prices, overviewData)
       const beta = computeBeta(positions, prices, overviewData)
       const { twr, annualizedReturn, startDate } = computeTWR(positions, prices)
 
-      // 3. Compute SPY period return for comparison
       let spyPeriodReturn = null
-      if (spyPrices.length && startDate) {
+      if (spyLoaded && startDate) {
         const startMs = new Date(startDate + 'T00:00:00Z').getTime()
         const filtered = spyPrices.filter(p => p.date >= startMs).sort((a, b) => a.date - b.date)
         if (filtered.length >= 2) {
@@ -192,7 +194,12 @@ export default function PortfolioMetrics({ positions, prices }) {
         computeSharpeSortino(annualizedReturn, beta, spyPrices, startDate)
 
       if (!cancelled) {
-        setMetrics({ pe, beta, twr, annualizedReturn, startDate, spyPeriodReturn, sharpe, sortino, spySharpe, spySortino, spyAnnualReturn })
+        setMetrics({
+          pe, beta, twr, annualizedReturn, startDate,
+          spyPeriodReturn, sharpe, sortino, spySharpe, spySortino, spyAnnualReturn,
+          // diagnostic flags
+          hasStocks, overviewSucceeded, spyLoaded,
+        })
         setLoading(false)
       }
     }
@@ -201,7 +208,16 @@ export default function PortfolioMetrics({ positions, prices }) {
     return () => { cancelled = true }
   }, [positions, prices]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const noData = <span className="text-slate-500 text-sm">Недостатньо даних</span>
+  function noData(reason) {
+    const msgs = {
+      noStocks: 'Лише для акцій',
+      apiLimit: 'Ліміт Alpha Vantage (25 запитів/день)',
+      noBeta: 'Потрібен β (Beta)',
+      noSpy: 'Не вдалось завантажити S&P 500',
+      default: 'Недостатньо даних',
+    }
+    return <span className="text-slate-500 text-sm">{msgs[reason] ?? msgs.default}</span>
+  }
 
   function betaStatus(beta) {
     if (beta == null) return null
@@ -268,7 +284,9 @@ export default function PortfolioMetrics({ positions, prices }) {
               <div className="text-3xl font-bold text-white mt-2">{fmtUk(m.pe, 1)}x</div>
               <MetricScale min={0} max={70} value={m.pe} label="Портфель" />
             </div>
-          ) : noData}
+          ) : !m?.hasStocks ? noData('noStocks')
+            : !m?.overviewSucceeded ? noData('apiLimit')
+            : noData()}
         </MetricCard>
 
         {/* Beta */}
@@ -291,7 +309,9 @@ export default function PortfolioMetrics({ positions, prices }) {
                 benchmarkLabel="Ринок"
               />
             </div>
-          ) : noData}
+          ) : !m?.hasStocks ? noData('noStocks')
+            : !m?.overviewSucceeded ? noData('apiLimit')
+            : noData()}
         </MetricCard>
 
         {/* Sharpe */}
@@ -314,7 +334,9 @@ export default function PortfolioMetrics({ positions, prices }) {
                 benchmarkLabel="S&P 500"
               />
             </div>
-          ) : noData}
+          ) : !m?.spyLoaded ? noData('noSpy')
+            : m?.beta == null ? noData('noBeta')
+            : noData()}
         </MetricCard>
 
         {/* Sortino */}
@@ -340,7 +362,9 @@ export default function PortfolioMetrics({ positions, prices }) {
                 benchmarkLabel="S&P 500"
               />
             </div>
-          ) : noData}
+          ) : !m?.spyLoaded ? noData('noSpy')
+            : m?.beta == null ? noData('noBeta')
+            : noData()}
         </MetricCard>
 
       </div>
