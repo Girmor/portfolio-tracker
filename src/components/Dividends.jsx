@@ -88,6 +88,7 @@ function ForecastTab({ dividends }) {
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} interval={1} />
               <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
               <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                 contentStyle={tooltipStyle}
                 formatter={(value, name) => [formatMoney(value), name]}
                 labelFormatter={label => label}
@@ -177,6 +178,7 @@ function ForecastTab({ dividends }) {
                     <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
                     <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                       contentStyle={tooltipStyle}
                       formatter={(value, name) => [`${formatMoney(value)}`, name]}
                       labelFormatter={label => <span style={{ fontWeight: 600 }}>{label}</span>}
