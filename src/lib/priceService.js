@@ -253,7 +253,7 @@ export async function getSpxHistoricalPrices() {
   const cacheKey = 'ph_spx_comparison'
   const finnhubKey = import.meta.env.VITE_FINNHUB_KEY
 
-  // Primary: Finnhub (5-year window)
+  // Try Finnhub with a 5-year window (within free tier limits)
   if (finnhubKey) {
     const from = Math.floor(Date.now() / 1000) - 5 * 365 * 24 * 60 * 60
     const to = Math.floor(Date.now() / 1000)
@@ -265,15 +265,13 @@ export async function getSpxHistoricalPrices() {
       const data = await res.json()
       if (data.s !== 'ok' || !data.t?.length) throw new Error('no data')
       const prices = data.t.map((ts, i) => ({ date: ts * 1000, price: data.c[i] }))
-      if (prices.length > 0) { compCacheSet(cacheKey, prices); return prices }
+      if (prices.length > 0) compCacheSet(cacheKey, prices)
+      return prices
     } catch {}
   }
 
-  // Fallback: stale localStorage cache
-  const cached = compCacheGet(cacheKey)
-  if (cached?.length) return cached
-
-  return []
+  // Fallback: stale cache
+  return compCacheGet(cacheKey) ?? []
 }
 
 /**

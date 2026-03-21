@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { fetchStockHistory } from '../lib/historicalPrices'
+import { getSpxHistoricalPrices } from '../lib/priceService'
 import {
-  fetchFundamentals,
-  fetchSpyPrices,
+  fetchOverview,
   computePE,
   computeBeta,
   computeTWR,
@@ -148,46 +147,40 @@ export default function PortfolioMetrics({ positions, prices }) {
     async function load() {
       setLoading(true)
 
+      // 1. Fetch Alpha Vantage OVERVIEW for each unique stock ticker
       const stockTickers = [...new Set(
-        positions.filter(p => p.type === 'stock').map(p => p.ticker)
+        positions
+          .filter(p => p.type === 'stock')
+          .map(p => p.ticker)
       )]
-      const hasStocks = stockTickers.length > 0
 
-      // Fetch in parallel: P/E via edge function + SPY history + ticker histories for beta
-      const [overviewData, spyPrices, ...tickerHistoryResults] = await Promise.all([
-        fetchFundamentals(stockTickers),
-        fetchSpyPrices(),
-        ...stockTickers.map(t => fetchStockHistory(t).then(h => [t, h])),
+      const [overviewResults, spyResult] = await Promise.allSettled([
+        Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v]))),
+        getSpxHistoricalPrices(),
       ])
 
       if (cancelled) return
 
-      // Build ticker history map for beta computation
-      const histories = {}
-      for (const result of tickerHistoryResults) {
-        if (result) {
-          const [ticker, histMap] = result
-          if (histMap?.size) histories[ticker] = histMap
+      const overviewData = {}
+      if (overviewResults.status === 'fulfilled') {
+        for (const r of overviewResults.value) {
+          if (r.status === 'fulfilled' && r.value) {
+            const [ticker, data] = r.value
+            if (data) overviewData[ticker] = data
+          }
         }
       }
 
-      // SPY as Map for beta computation
-      const spyMap = new Map(
-        spyPrices.map(({ date, price }) => {
-          const day = new Date(date).toISOString().split('T')[0]
-          return [day, price]
-        })
-      )
+      const spyPrices = spyResult.status === 'fulfilled' ? spyResult.value : []
 
-      const overviewSucceeded = Object.keys(overviewData).length > 0
-      const spyLoaded = spyPrices.length > 0
-
+      // 2. Compute metrics
       const pe = computePE(positions, prices, overviewData)
-      const beta = computeBeta(positions, prices, histories, spyMap)
+      const beta = computeBeta(positions, prices, overviewData)
       const { twr, annualizedReturn, startDate } = computeTWR(positions, prices)
 
+      // 3. Compute SPY period return for comparison
       let spyPeriodReturn = null
-      if (spyLoaded && startDate) {
+      if (spyPrices.length && startDate) {
         const startMs = new Date(startDate + 'T00:00:00Z').getTime()
         const filtered = spyPrices.filter(p => p.date >= startMs).sort((a, b) => a.date - b.date)
         if (filtered.length >= 2) {
@@ -199,12 +192,7 @@ export default function PortfolioMetrics({ positions, prices }) {
         computeSharpeSortino(annualizedReturn, beta, spyPrices, startDate)
 
       if (!cancelled) {
-        setMetrics({
-          pe, beta, twr, annualizedReturn, startDate,
-          spyPeriodReturn, sharpe, sortino, spySharpe, spySortino, spyAnnualReturn,
-          // diagnostic flags
-          hasStocks, overviewSucceeded, spyLoaded,
-        })
+        setMetrics({ pe, beta, twr, annualizedReturn, startDate, spyPeriodReturn, sharpe, sortino, spySharpe, spySortino, spyAnnualReturn })
         setLoading(false)
       }
     }
@@ -213,16 +201,7 @@ export default function PortfolioMetrics({ positions, prices }) {
     return () => { cancelled = true }
   }, [positions, prices]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function noData(reason) {
-    const msgs = {
-      noStocks: 'Лише для акцій',
-      apiLimit: 'Не вдалось отримати дані (Yahoo Finance недоступний)',
-      noBeta: 'Потрібен β (Beta)',
-      noSpy: 'Не вдалось завантажити S&P 500',
-      default: 'Недостатньо даних',
-    }
-    return <span className="text-slate-500 text-sm">{msgs[reason] ?? msgs.default}</span>
-  }
+  const noData = <span className="text-slate-500 text-sm">Недостатньо даних</span>
 
   function betaStatus(beta) {
     if (beta == null) return null
@@ -289,9 +268,7 @@ export default function PortfolioMetrics({ positions, prices }) {
               <div className="text-3xl font-bold text-white mt-2">{fmtUk(m.pe, 1)}x</div>
               <MetricScale min={0} max={70} value={m.pe} label="Портфель" />
             </div>
-          ) : !m?.hasStocks ? noData('noStocks')
-            : !m?.overviewSucceeded ? noData('apiLimit')
-            : noData()}
+          ) : noData}
         </MetricCard>
 
         {/* Beta */}
@@ -314,9 +291,7 @@ export default function PortfolioMetrics({ positions, prices }) {
                 benchmarkLabel="Ринок"
               />
             </div>
-          ) : !m?.hasStocks ? noData('noStocks')
-            : !m?.overviewSucceeded ? noData('apiLimit')
-            : noData()}
+          ) : noData}
         </MetricCard>
 
         {/* Sharpe */}
@@ -339,9 +314,7 @@ export default function PortfolioMetrics({ positions, prices }) {
                 benchmarkLabel="S&P 500"
               />
             </div>
-          ) : !m?.spyLoaded ? noData('noSpy')
-            : m?.beta == null ? noData('noBeta')
-            : noData()}
+          ) : noData}
         </MetricCard>
 
         {/* Sortino */}
@@ -367,9 +340,7 @@ export default function PortfolioMetrics({ positions, prices }) {
                 benchmarkLabel="S&P 500"
               />
             </div>
-          ) : !m?.spyLoaded ? noData('noSpy')
-            : m?.beta == null ? noData('noBeta')
-            : noData()}
+          ) : noData}
         </MetricCard>
 
       </div>
