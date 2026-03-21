@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchStockHistory } from '../lib/historicalPrices'
 import {
-  fetchOverview,
+  fetchOverviewAll,
   computePE,
   computeBeta,
   computeTWR,
@@ -147,43 +147,45 @@ export default function PortfolioMetrics({ positions, prices }) {
     async function load() {
       setLoading(true)
 
-      // 1. Fetch Alpha Vantage OVERVIEW for each unique stock ticker
       const stockTickers = [...new Set(
-        positions
-          .filter(p => p.type === 'stock')
-          .map(p => p.ticker)
+        positions.filter(p => p.type === 'stock').map(p => p.ticker)
       )]
-      console.log('[metrics] positions:', positions.map(p => `${p.ticker}(${p.type})`), 'stockTickers:', stockTickers)
+      const allTickers = [...new Set(positions.map(p => p.ticker))]
 
-      const [overviewResults, spyResult] = await Promise.allSettled([
-        Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v]))),
-        fetchStockHistory('SPY').then(map =>
-          [...(map || new Map()).entries()]
-            .map(([day, price]) => ({ date: new Date(day + 'T00:00:00Z').getTime(), price }))
-            .sort((a, b) => a.date - b.date)
-        ),
+      // Fetch overviews (throttled), SPY map, and all ticker histories in parallel
+      const [overviewResult, spyResult, historiesResult] = await Promise.allSettled([
+        fetchOverviewAll(stockTickers),
+        fetchStockHistory('SPY'),
+        Promise.allSettled(allTickers.map(t => fetchStockHistory(t).then(m => [t, m]))),
       ])
 
       if (cancelled) return
 
-      const overviewData = {}
-      if (overviewResults.status === 'fulfilled') {
-        for (const r of overviewResults.value) {
+      const overviewData = overviewResult.status === 'fulfilled' ? overviewResult.value : {}
+
+      const spyMapRaw = spyResult.status === 'fulfilled' ? spyResult.value : null
+      const spyPrices = spyMapRaw?.size
+        ? [...spyMapRaw.entries()]
+            .map(([day, price]) => ({ date: new Date(day + 'T00:00:00Z').getTime(), price }))
+            .sort((a, b) => a.date - b.date)
+        : []
+
+      const histories = {}
+      if (historiesResult.status === 'fulfilled') {
+        for (const r of historiesResult.value) {
           if (r.status === 'fulfilled' && r.value) {
-            const [ticker, data] = r.value
-            if (data) overviewData[ticker] = data
+            const [ticker, map] = r.value
+            if (map?.size) histories[ticker] = map
           }
         }
       }
 
-      const spyPrices = spyResult.status === 'fulfilled' ? spyResult.value : []
-
-      // 2. Compute metrics
+      // Compute metrics
       const pe = computePE(positions, prices, overviewData)
-      const beta = computeBeta(positions, prices, overviewData)
+      const beta = computeBeta(positions, prices, histories, spyMapRaw || new Map())
       const { twr, annualizedReturn, startDate } = computeTWR(positions, prices)
 
-      // 3. Compute SPY period return for comparison
+      // SPY period return for TWR comparison
       let spyPeriodReturn = null
       if (spyPrices.length && startDate) {
         const startMs = new Date(startDate + 'T00:00:00Z').getTime()
