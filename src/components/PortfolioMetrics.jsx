@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getSpxHistoricalPrices } from '../lib/priceService'
+import { fetchStockHistory } from '../lib/historicalPrices'
 import {
   fetchOverview,
   computePE,
@@ -156,7 +156,11 @@ export default function PortfolioMetrics({ positions, prices }) {
 
       const [overviewResults, spyResult] = await Promise.allSettled([
         Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v]))),
-        getSpxHistoricalPrices(),
+        fetchStockHistory('SPY').then(map =>
+          [...(map || new Map()).entries()]
+            .map(([day, price]) => ({ date: new Date(day + 'T00:00:00Z').getTime(), price }))
+            .sort((a, b) => a.date - b.date)
+        ),
       ])
 
       if (cancelled) return
