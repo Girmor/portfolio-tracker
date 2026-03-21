@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -103,7 +103,26 @@ export default function Budget() {
   })
 
   const [chartCurrency, setChartCurrency] = useState('native')
+  const [fxRates, setFxRates] = useState({ UAH: 41.5, EUR: 1.08 }) // USD per 1 unit
   const [copying, setCopying] = useState(false)
+
+  useEffect(() => {
+    async function fetchRates() {
+      try {
+        // Frankfurter: ECB rates, CORS-enabled, no key needed
+        const res = await fetch('https://api.frankfurter.app/latest?base=USD&symbols=UAH,EUR')
+        const data = await res.json()
+        const uahPerUsd = data.rates?.UAH
+        const eurPerUsd = data.rates?.EUR
+        if (uahPerUsd && eurPerUsd) {
+          setFxRates({ UAH: uahPerUsd, EUR: 1 / eurPerUsd })
+        }
+      } catch {
+        // keep defaults on error
+      }
+    }
+    fetchRates()
+  }, [])
 
   async function handleCopyFromPrevMonth() {
     const prevMonth = addMonths(selectedMonth, -1)
@@ -237,7 +256,7 @@ export default function Budget() {
     return t
   }
   function toUsd(t) {
-    return (t.USD || 0) + (t.EUR || 0) * 1.08 + (t.UAH || 0) / 41.5
+    return (t.USD || 0) + (t.EUR || 0) * fxRates.EUR + (t.UAH || 0) / fxRates.UAH
   }
 
   const assetGrouped = groupByCurrency(assets)
@@ -257,8 +276,8 @@ export default function Budget() {
     for (const item of items) {
       const prev = map.get(item.month) || { assets: 0, liabilities: 0 }
       const usd = item.currency === 'USD' ? Number(item.amount)
-               : item.currency === 'EUR' ? Number(item.amount) * 1.08
-               : Number(item.amount) / 41.5
+               : item.currency === 'EUR' ? Number(item.amount) * fxRates.EUR
+               : Number(item.amount) / fxRates.UAH
       if (item.type === 'liability') prev.liabilities += usd
       else prev.assets += usd
       map.set(item.month, prev)
@@ -272,7 +291,7 @@ export default function Budget() {
         assets,
         liabilities,
       }))
-  }, [items])
+  }, [items, fxRates])
 
   if (budgetLoading) return <div className="text-slate-400 animate-pulse">Завантаження...</div>
 
@@ -662,6 +681,11 @@ export default function Budget() {
             className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${chartCurrency === 'usd' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}
           >USD</button>
         </div>
+        {chartCurrency === 'usd' && (
+          <span className="text-xs text-slate-500">
+            НБУ: 1 USD = {fxRates.UAH.toFixed(2)} грн · 1 EUR = {(fxRates.EUR * fxRates.UAH).toFixed(2)} грн
+          </span>
+        )}
       </div>
 
       {showCashflowForm && (
@@ -711,8 +735,8 @@ export default function Budget() {
         function cvt(amount, currency) {
           if (chartCurrency !== 'usd') return amount
           if (currency === 'USD') return amount
-          if (currency === 'EUR') return amount * 1.08
-          return amount / 41.5
+          if (currency === 'EUR') return amount * fxRates.EUR
+          return amount / fxRates.UAH
         }
 
         const totalIncome = dataRows.reduce((s, r) => s + cvt(r.income, r.currency), 0)
