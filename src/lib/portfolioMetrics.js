@@ -15,10 +15,11 @@ export async function fetchOverview(ticker) {
   const key = import.meta.env.VITE_ALPHAVANTAGE_KEY2 || import.meta.env.VITE_ALPHAVANTAGE_KEY
   if (!key) return null
 
-  const cacheKey = `av_overview_${ticker}`
+  // Use key-specific cache prefix so KEY1/KEY2 don't share stale entries
+  const cacheKey = `av2_overview_${ticker}`
   try {
     const cached = sessionStorage.getItem(cacheKey)
-    if (cached) return JSON.parse(cached)
+    if (cached && cached !== 'null') return JSON.parse(cached)
   } catch {}
 
   try {
