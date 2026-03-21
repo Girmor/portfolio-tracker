@@ -6,15 +6,12 @@
 const RISK_FREE = 0.043 // US 5-year Treasury approximation
 
 /**
- * Fetch P/E and Beta for a stock ticker via Finnhub /stock/metric.
- * Free tier: 60 req/min. Results cached in sessionStorage for the session.
+ * Fetch P/E and Beta for a stock ticker via Yahoo Finance quoteSummary.
+ * No API key required. Results cached in sessionStorage for the session.
  * Returns { pe: number|null, beta: number|null } or null on failure.
  */
 export async function fetchOverview(ticker) {
-  const key = import.meta.env.VITE_FINNHUB_KEY
-  if (!key) return null
-
-  const cacheKey = `fh_metric_${ticker}`
+  const cacheKey = `yf_metric_${ticker}`
   try {
     const cached = sessionStorage.getItem(cacheKey)
     if (cached) return JSON.parse(cached)
@@ -22,17 +19,21 @@ export async function fetchOverview(ticker) {
 
   try {
     const res = await fetch(
-      `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${key}`
+      `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}` +
+      `?modules=defaultKeyStatistics,summaryDetail`
     )
-    if (!res.ok) return null
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json()
-    const m = json.metric
-    if (!m) return null
+    const r = json.quoteSummary?.result?.[0]
+    if (!r) return null
 
-    // peTTM = trailing twelve months P/E; peNormalizedAnnual as fallback
-    const peRaw = m.peTTM ?? m.peBasicExclExtraTTM ?? m.peNormalizedAnnual ?? null
+    const ks = r.defaultKeyStatistics
+    const sd = r.summaryDetail
+
+    const peRaw = sd?.trailingPE?.raw ?? ks?.forwardPE?.raw ?? null
     const pe = peRaw != null && isFinite(peRaw) ? peRaw : null
-    const beta = m.beta != null && isFinite(m.beta) ? m.beta : null
+    const betaRaw = ks?.beta?.raw ?? null
+    const beta = betaRaw != null && isFinite(betaRaw) ? betaRaw : null
 
     const result = { pe, beta }
     try { sessionStorage.setItem(cacheKey, JSON.stringify(result)) } catch {}

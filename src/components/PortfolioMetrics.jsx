@@ -211,7 +211,7 @@ export default function PortfolioMetrics({ positions, prices }) {
   function noData(reason) {
     const msgs = {
       noStocks: 'Лише для акцій',
-      apiLimit: 'Не вдалось отримати дані Finnhub',
+      apiLimit: 'Не вдалось отримати дані (Yahoo Finance недоступний)',
       noBeta: 'Потрібен β (Beta)',
       noSpy: 'Не вдалось завантажити S&P 500',
       default: 'Недостатньо даних',

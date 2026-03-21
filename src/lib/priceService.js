@@ -273,22 +273,22 @@ export async function getSpxHistoricalPrices() {
   const cached = compCacheGet(cacheKey)
   if (cached?.length) return cached
 
-  // Last resort: stooq.com — free, no key, CORS-friendly
+  // Last resort: Yahoo Finance chart API (unofficial, no key, CORS-friendly)
   try {
-    const res = await fetch('https://stooq.com/q/d/l/?s=spy.us&i=d')
+    const res = await fetch(
+      'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=5y'
+    )
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const text = await res.text()
-    const lines = text.trim().split('\n').slice(1) // skip header row
-    const prices = lines
-      .map(line => {
-        const cols = line.split(',')
-        const date = cols[0]
-        const close = parseFloat(cols[4])
-        if (!date || !isFinite(close)) return null
-        return { date: new Date(date + 'T00:00:00Z').getTime(), price: close }
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.date - b.date)
+    const json = await res.json()
+    const result = json.chart?.result?.[0]
+    if (!result) throw new Error('no result')
+    const timestamps = result.timestamp || []
+    const closes = result.indicators?.adjclose?.[0]?.adjclose
+                ?? result.indicators?.quote?.[0]?.close
+                ?? []
+    const prices = timestamps
+      .map((ts, i) => ({ date: ts * 1000, price: closes[i] }))
+      .filter(p => p.price != null && isFinite(p.price))
     if (prices.length > 0) { compCacheSet(cacheKey, prices); return prices }
   } catch {}
 
