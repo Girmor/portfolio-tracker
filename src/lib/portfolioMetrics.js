@@ -11,7 +11,8 @@ const RISK_FREE = 0.043 // US 5-year Treasury approximation
  * Returns { pe: number|null, beta: number|null } or null on failure.
  */
 export async function fetchOverview(ticker) {
-  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY
+  // Use dedicated second key for metrics to avoid sharing quota with history/dividends
+  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY2 || import.meta.env.VITE_ALPHAVANTAGE_KEY
   if (!key) return null
 
   const cacheKey = `av_overview_${ticker}`
