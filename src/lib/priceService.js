@@ -274,6 +274,33 @@ export async function getSpxHistoricalPrices() {
   return compCacheGet(cacheKey) ?? []
 }
 
+/**
+ * Fetch dividend history for a stock ticker from Finnhub.
+ * Returns { freq, history: [{date, amount}] } or null on failure.
+ * freq: 1=annual, 2=semiannual, 4=quarterly, 12=monthly
+ */
+export async function fetchDividendHistory(ticker) {
+  const key = import.meta.env.VITE_FINNHUB_KEY
+  if (!key) return null
+  const from = `${new Date().getFullYear() - 5}-01-01`
+  const to = new Date().toISOString().split('T')[0]
+  try {
+    const res = await fetch(
+      `https://finnhub.io/api/v1/stock/dividend2?symbol=${encodeURIComponent(ticker)}&from=${from}&to=${to}&token=${key}`
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    const records = json?.data
+    if (!Array.isArray(records) || records.length === 0) return null
+    const sorted = [...records].sort((a, b) => new Date(a.date) - new Date(b.date))
+    const freq = sorted[sorted.length - 1]?.freq ?? null
+    const history = sorted.map(r => ({ date: r.date, amount: Number(r.amount) }))
+    return { freq, history }
+  } catch {
+    return null
+  }
+}
+
 export async function searchStocks(query) {
   const key = import.meta.env.VITE_FINNHUB_KEY
   if (!key || !query || query.length < 1) return []

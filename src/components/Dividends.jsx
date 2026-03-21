@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -17,6 +17,7 @@ import {
 } from 'recharts'
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
 import { buildForecast } from '../lib/dividendForecast'
+import { fetchDividendHistory } from '../lib/priceService'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 const MONTHS = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру']
@@ -40,7 +41,30 @@ const tooltipStyle = {
 }
 
 function ForecastTab({ dividends }) {
-  const forecast = useMemo(() => buildForecast(dividends), [dividends])
+  const [finnhubMeta, setFinnhubMeta] = useState({})
+  const [finnhubLoading, setFinnhubLoading] = useState(false)
+  const fetchedRef = useRef(new Set())
+
+  // Unique stock tickers (skip crypto — no dividends on Finnhub)
+  const tickers = useMemo(() => [...new Set(dividends.map(d => d.ticker))], [dividends])
+
+  useEffect(() => {
+    const missing = tickers.filter(t => !fetchedRef.current.has(t))
+    if (missing.length === 0) return
+    setFinnhubLoading(true)
+    missing.forEach(t => fetchedRef.current.add(t))
+    Promise.allSettled(missing.map(t => fetchDividendHistory(t).then(data => ({ t, data }))))
+      .then(results => {
+        const updates = {}
+        results.forEach(r => {
+          if (r.status === 'fulfilled' && r.value.data) updates[r.value.t] = r.value.data
+        })
+        setFinnhubMeta(prev => ({ ...prev, ...updates }))
+        setFinnhubLoading(false)
+      })
+  }, [tickers])
+
+  const forecast = useMemo(() => buildForecast(dividends, finnhubMeta), [dividends, finnhubMeta])
   const { trailing12M, forward12M, monthlyRunRate, growthPct, series, perTicker } = forecast
 
   if (dividends.length === 0) {
@@ -53,6 +77,13 @@ function ForecastTab({ dividends }) {
 
   return (
     <div className="space-y-6">
+      {finnhubLoading && (
+        <div className="text-xs text-slate-500 flex items-center gap-2">
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-slate-500 border-t-indigo-400 animate-spin" />
+          Завантаження даних з Finnhub…
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="glass-card rounded-xl p-5">
@@ -138,6 +169,7 @@ function ForecastTab({ dividends }) {
                     <th className="py-3 px-4 text-left font-medium text-slate-400">Частота</th>
                     <th className="py-3 px-4 text-right font-medium text-slate-400">Середня виплата</th>
                     <th className="py-3 px-4 text-right font-medium text-slate-400">Прогноз / рік</th>
+                    <th className="py-3 px-4 text-right font-medium text-slate-400">Ріст DPS</th>
                     <th className="py-3 px-4 text-right font-medium text-slate-400">%</th>
                   </tr>
                 </thead>
@@ -145,10 +177,16 @@ function ForecastTab({ dividends }) {
                   {perTicker.map(t => {
                     const annual = t.forecastEvents.reduce((s, e) => s + e.amount, 0)
                     const pct = forward12M > 0 ? (annual / forward12M * 100).toFixed(1) : '0'
+                    const dps = t.dpsGrowth?.growthPct
                     return (
                       <tr key={t.ticker} className="border-b border-white/[0.06] hover:bg-white/5">
                         <td className="py-3 px-4 font-medium text-white">{t.ticker}</td>
-                        <td className="py-3 px-4 text-slate-300">{t.freqLabel}</td>
+                        <td className="py-3 px-4">
+                          <span className="text-slate-300">{t.freqLabel}</span>
+                          {t.freqSource === 'finnhub' && (
+                            <span className="ml-1.5 text-[10px] text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded">Finnhub</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-right text-slate-300">
                           {t.frequency === 'unknown' ? '—' : formatMoney(t.avgPayment)}
                         </td>
@@ -156,6 +194,14 @@ function ForecastTab({ dividends }) {
                           {t.frequency === 'unknown'
                             ? <span className="text-slate-500">Недостатньо даних</span>
                             : <span className="text-indigo-400 font-medium">{formatMoney(annual)}</span>
+                          }
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {dps === null || dps === undefined
+                            ? <span className="text-slate-500">—</span>
+                            : <span className={dps >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                {dps >= 0 ? '▲' : '▼'} {Math.abs(dps).toFixed(1)}%
+                              </span>
                           }
                         </td>
                         <td className="py-3 px-4 text-right text-slate-400">

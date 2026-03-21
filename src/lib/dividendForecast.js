@@ -31,6 +31,15 @@ export function detectFrequency(sortedDates) {
   return 'annual'
 }
 
+// Map Finnhub freq number → our frequency string
+function finnhubFreqToString(freq) {
+  if (freq === 12) return 'monthly'
+  if (freq === 4)  return 'quarterly'
+  if (freq === 2)  return 'semiannual'
+  if (freq === 1)  return 'annual'
+  return 'unknown'
+}
+
 const FREQ_MONTHS = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 }
 const FREQ_LOOKBACK = { monthly: 6, quarterly: 4, semiannual: 3, annual: 2 }
 const FREQ_LABEL = {
@@ -41,13 +50,55 @@ const FREQ_LABEL = {
   unknown: 'невідомо',
 }
 
-export function buildTickerForecast(tickerDividends) {
+/**
+ * Compute annual DPS from Finnhub history and return YoY growth % (last 2 full years).
+ * Returns { byYear: { [year]: dps }, growthPct: number|null }
+ */
+function computeDpsGrowth(finnhubHistory) {
+  if (!finnhubHistory || finnhubHistory.length === 0) return { byYear: {}, growthPct: null }
+  const byYear = {}
+  finnhubHistory.forEach(({ date, amount }) => {
+    const y = new Date(date).getFullYear()
+    byYear[y] = (byYear[y] || 0) + amount
+  })
+  const currentYear = new Date().getFullYear()
+  const years = Object.keys(byYear).map(Number).sort((a, b) => a - b)
+  // Use last 2 completed years (exclude current if incomplete)
+  const completedYears = years.filter(y => y < currentYear)
+  if (completedYears.length < 2) return { byYear, growthPct: null }
+  const prev = byYear[completedYears[completedYears.length - 2]]
+  const last = byYear[completedYears[completedYears.length - 1]]
+  const growthPct = prev > 0 ? ((last - prev) / prev) * 100 : null
+  return { byYear, growthPct }
+}
+
+export function buildTickerForecast(tickerDividends, finnhubData = null) {
   const sorted = [...tickerDividends].sort((a, b) => new Date(a.date) - new Date(b.date))
   const dates = sorted.map(d => d.date)
-  const frequency = detectFrequency(dates)
+  let frequency = detectFrequency(dates)
+  let freqSource = 'local'
+
+  // If not enough local data, try Finnhub frequency
+  if (frequency === 'unknown' && finnhubData?.freq) {
+    const fromFinnhub = finnhubFreqToString(finnhubData.freq)
+    if (fromFinnhub !== 'unknown') {
+      frequency = fromFinnhub
+      freqSource = 'finnhub'
+    }
+  }
+
+  const dpsGrowth = computeDpsGrowth(finnhubData?.history)
 
   if (frequency === 'unknown') {
-    return { ticker: sorted[0]?.ticker, frequency, avgPayment: 0, forecastEvents: [], freqLabel: FREQ_LABEL.unknown }
+    return {
+      ticker: sorted[0]?.ticker,
+      frequency,
+      freqLabel: FREQ_LABEL.unknown,
+      freqSource,
+      avgPayment: 0,
+      forecastEvents: [],
+      dpsGrowth,
+    }
   }
 
   const lookback = FREQ_LOOKBACK[frequency]
@@ -75,12 +126,14 @@ export function buildTickerForecast(tickerDividends) {
     ticker: sorted[0]?.ticker,
     frequency,
     freqLabel: FREQ_LABEL[frequency],
+    freqSource,
     avgPayment,
     forecastEvents,
+    dpsGrowth,
   }
 }
 
-export function buildForecast(allDividends) {
+export function buildForecast(allDividends, finnhubMeta = {}) {
   if (!allDividends || allDividends.length === 0) {
     return { trailing12M: 0, forward12M: 0, monthlyRunRate: 0, growthPct: null, series: [], perTicker: [] }
   }
@@ -92,7 +145,9 @@ export function buildForecast(allDividends) {
     byTicker[d.ticker].push(d)
   })
 
-  const perTicker = Object.values(byTicker).map(buildTickerForecast)
+  const perTicker = Object.entries(byTicker).map(([ticker, divs]) =>
+    buildTickerForecast(divs, finnhubMeta[ticker] ?? null)
+  )
 
   // Aggregate forecast by month
   const forecastByMonth = {}
