@@ -23,6 +23,7 @@ import {
 } from '../hooks/usePortfoliosQuery'
 import { usePricesQuery } from '../hooks/usePricesQuery'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
+import PortfolioMetrics from './PortfolioMetrics'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
@@ -663,6 +664,12 @@ export default function PortfolioDetail() {
           </div>
         </div>
       )}
+
+      {/* Metrics Section */}
+      <PortfolioMetrics
+        positions={positions}
+        prices={prices}
+      />
 
       {/* Add Trade Modal */}
       {showAddTrade && (
