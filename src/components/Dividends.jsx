@@ -43,26 +43,31 @@ const tooltipStyle = {
 function ForecastTab({ dividends }) {
   const [finnhubMeta, setFinnhubMeta] = useState({})
   const [finnhubLoading, setFinnhubLoading] = useState(false)
-  const fetchedRef = useRef(new Set())
 
-  // Unique stock tickers (skip crypto — no dividends on Finnhub)
-  const tickers = useMemo(() => [...new Set(dividends.map(d => d.ticker))], [dividends])
+  // Stable string key for effect dep
+  const tickersKey = useMemo(
+    () => [...new Set(dividends.map(d => d.ticker))].sort().join(','),
+    [dividends],
+  )
 
   useEffect(() => {
-    const missing = tickers.filter(t => !fetchedRef.current.has(t))
-    if (missing.length === 0) return
+    if (!tickersKey) return
+    const tickers = tickersKey.split(',')
     setFinnhubLoading(true)
-    missing.forEach(t => fetchedRef.current.add(t))
-    Promise.allSettled(missing.map(t => fetchDividendHistory(t).then(data => ({ t, data }))))
-      .then(results => {
-        const updates = {}
-        results.forEach(r => {
-          if (r.status === 'fulfilled' && r.value.data) updates[r.value.t] = r.value.data
-        })
-        setFinnhubMeta(prev => ({ ...prev, ...updates }))
-        setFinnhubLoading(false)
+    Promise.allSettled(
+      tickers.map(t => fetchDividendHistory(t).then(data => [t, data]))
+    ).then(results => {
+      const updates = {}
+      results.forEach(r => {
+        if (r.status === 'fulfilled') {
+          const [t, data] = r.value
+          if (data) updates[t] = data
+        }
       })
-  }, [tickers])
+      setFinnhubMeta(updates)
+      setFinnhubLoading(false)
+    })
+  }, [tickersKey])
 
   const forecast = useMemo(() => buildForecast(dividends, finnhubMeta), [dividends, finnhubMeta])
   const { trailing12M, forward12M, monthlyRunRate, growthPct, series, perTicker } = forecast
