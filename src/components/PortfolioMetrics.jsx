@@ -147,16 +147,27 @@ export default function PortfolioMetrics({ positions, prices }) {
     async function load() {
       setLoading(true)
 
-      const stockTickers = [...new Set(
-        positions.filter(p => p.type === 'stock').map(p => p.ticker)
-      )]
-      const allTickers = [...new Set(positions.map(p => p.ticker))]
+      // Only active positions need price histories (avoids rate-limit blast with sold tickers)
+      function calcQtyLocal(pos) {
+        let buy = 0, sell = 0
+        for (const t of (pos.trades || [])) {
+          if (t.type === 'buy') buy += Number(t.quantity)
+          else sell += Number(t.quantity)
+        }
+        return buy - sell
+      }
 
-      // Fetch overviews (throttled), SPY map, and all ticker histories in parallel
+      const activePositions = positions.filter(p => calcQtyLocal(p) > 0)
+      const stockTickers = [...new Set(
+        activePositions.filter(p => p.type === 'stock').map(p => p.ticker)
+      )]
+      const activeTickers = [...new Set(activePositions.map(p => p.ticker))]
+
+      // Fetch overviews (throttled), SPY map, and active ticker histories in parallel
       const [overviewResult, spyResult, historiesResult] = await Promise.allSettled([
         fetchOverviewAll(stockTickers),
         fetchStockHistory('SPY'),
-        Promise.allSettled(allTickers.map(t => fetchStockHistory(t).then(m => [t, m]))),
+        Promise.allSettled(activeTickers.map(t => fetchStockHistory(t).then(m => [t, m]))),
       ])
 
       if (cancelled) return
