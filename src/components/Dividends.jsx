@@ -12,7 +12,7 @@ import {
 import { formatMoney, formatDate } from '../lib/formatters'
 import { useDividendsQuery, useCreateDividendMutation, useDeleteDividendMutation } from '../hooks/useDividendsQuery'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
   ResponsiveContainer, Cell,
 } from 'recharts'
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
@@ -81,9 +81,9 @@ function ForecastTab({ dividends }) {
       {/* Combined 24-month chart */}
       <div className="glass-card rounded-xl p-5">
         <h3 className="text-sm font-semibold text-slate-200 mb-4">Дивіденди: факт + прогноз (24 місяці)</h3>
-        <div style={{ height: 240 }}>
+        <div style={{ height: 260 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <BarChart data={series} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} interval={1} />
               <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
@@ -95,8 +95,12 @@ function ForecastTab({ dividends }) {
               <Legend
                 formatter={value => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{value}</span>}
               />
-              <Bar dataKey="actual" name="Факт" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={36} />
-              <Bar dataKey="forecast" name="Прогноз" fill="#818cf8" opacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={36} />
+              <Bar dataKey="actual" name="Факт" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={36}>
+                <LabelList dataKey="actual" position="top" formatter={v => v > 0 ? `$${Math.round(v)}` : ''} style={{ fill: '#94a3b8', fontSize: 11 }} />
+              </Bar>
+              <Bar dataKey="forecast" name="Прогноз" fill="#818cf8" opacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={36}>
+                <LabelList dataKey="forecast" position="top" formatter={v => v > 0 ? `$${Math.round(v)}` : ''} style={{ fill: '#94a3b8', fontSize: 11 }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
