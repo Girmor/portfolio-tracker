@@ -458,6 +458,7 @@ export default function Dividends() {
                       return <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{name}</span>
                     }}
                     contentStyle={tooltipStyle}
+                    itemStyle={{ color: '#e2e8f0' }}
                   />
                   <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={48}>
                     {monthlyData.map((entry, i) => (
