@@ -102,6 +102,7 @@ export default function Budget() {
     defaultValues: { month: currentMonth(), currency: 'UAH', income: '', expenses: '', investments: '' },
   })
 
+  const [chartCurrency, setChartCurrency] = useState('native')
   const [copying, setCopying] = useState(false)
 
   async function handleCopyFromPrevMonth() {
@@ -644,11 +645,23 @@ export default function Budget() {
         </div>
       </div>
 
-      {/* Year selector */}
-      <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
-        <button onClick={() => setSelectedYear(y => y - 1)} className="hover:text-slate-200 px-1 transition-colors"><ChevronLeft size={14} /></button>
-        <span className="font-medium w-10 text-center text-slate-200">{selectedYear}</span>
-        <button onClick={() => setSelectedYear(y => y + 1)} disabled={selectedYear >= new Date().getFullYear()} className="hover:text-slate-200 px-1 disabled:opacity-30 transition-colors"><ChevronRight size={14} /></button>
+      {/* Year selector + currency toggle */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <button onClick={() => setSelectedYear(y => y - 1)} className="hover:text-slate-200 px-1 transition-colors"><ChevronLeft size={14} /></button>
+          <span className="font-medium w-10 text-center text-slate-200">{selectedYear}</span>
+          <button onClick={() => setSelectedYear(y => y + 1)} disabled={selectedYear >= new Date().getFullYear()} className="hover:text-slate-200 px-1 disabled:opacity-30 transition-colors"><ChevronRight size={14} /></button>
+        </div>
+        <div className="flex bg-white/8 rounded-lg p-0.5">
+          <button
+            onClick={() => setChartCurrency('native')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${chartCurrency === 'native' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >UAH</button>
+          <button
+            onClick={() => setChartCurrency('usd')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${chartCurrency === 'usd' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >USD</button>
+        </div>
       </div>
 
       {showCashflowForm && (
@@ -692,20 +705,28 @@ export default function Budget() {
 
       {(() => {
         const yearRows = buildYearRows(cashflow, selectedYear)
-        const activeCurrency = yearRows.find(r => r.id)?.currency ?? 'UAH'
+        const activeCurrency = chartCurrency === 'usd' ? 'USD' : (yearRows.find(r => r.id)?.currency ?? 'UAH')
         const dataRows = yearRows.filter(r => r.id)
-        const totalIncome = dataRows.reduce((s, r) => s + r.income, 0)
-        const totalExpenses = dataRows.reduce((s, r) => s + r.expenses, 0)
-        const totalInvestments = dataRows.reduce((s, r) => s + r.investments, 0)
+
+        function cvt(amount, currency) {
+          if (chartCurrency !== 'usd') return amount
+          if (currency === 'USD') return amount
+          if (currency === 'EUR') return amount * 1.08
+          return amount / 41.5
+        }
+
+        const totalIncome = dataRows.reduce((s, r) => s + cvt(r.income, r.currency), 0)
+        const totalExpenses = dataRows.reduce((s, r) => s + cvt(r.expenses, r.currency), 0)
+        const totalInvestments = dataRows.reduce((s, r) => s + cvt(r.investments, r.currency), 0)
         const avgIncome = dataRows.length ? totalIncome / dataRows.length : 0
         const avgExpenses = dataRows.length ? totalExpenses / dataRows.length : 0
         const avgInvestments = dataRows.length ? totalInvestments / dataRows.length : 0
 
         const chartData = yearRows.map(r => ({
           name: r.name.slice(0, 3),
-          Доходи: r.income,
-          Витрати: r.expenses,
-          Інвестиції: r.investments,
+          Доходи: cvt(r.income, r.currency),
+          Витрати: cvt(r.expenses, r.currency),
+          Інвестиції: cvt(r.investments, r.currency),
         }))
 
         if (viewMode === 'chart') {
@@ -743,7 +764,10 @@ export default function Budget() {
                   <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
                     <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                    <YAxis width={60} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}к`} />
+                    <YAxis width={60} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => {
+                      if (v === 0) return '0'
+                      return chartCurrency === 'usd' ? `$${v.toFixed(0)}` : `${(v / 1000).toFixed(0)}к`
+                    }} />
                     <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                     <Legend wrapperStyle={{ color: '#94a3b8' }} />
                     <Bar dataKey="Доходи"     fill="#10b981" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Доходи'     ? 1 : 0.15} />
