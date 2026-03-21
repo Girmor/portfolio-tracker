@@ -17,6 +17,7 @@ export async function fetchOverview(ticker) {
   const cacheKey = `av_overview_${ticker}`
   try {
     const cached = sessionStorage.getItem(cacheKey)
+    if (cached === 'null') return null   // cached rate-limit response
     if (cached) return JSON.parse(cached)
   } catch {}
 
@@ -27,8 +28,16 @@ export async function fetchOverview(ticker) {
     )
     if (!res.ok) return null
     const json = await res.json()
-    // Rate-limited or invalid responses lack Symbol field
-    if (!json.Symbol) return null
+
+    // Rate limit: AV returns {"Information": "Thank you for using Alpha Vantage..."}
+    // Cache as null so we don't retry and waste remaining quota
+    if (!json.Symbol) {
+      const isRateLimit = typeof json.Information === 'string' || typeof json.Note === 'string'
+      if (isRateLimit) {
+        try { sessionStorage.setItem(cacheKey, 'null') } catch {}
+      }
+      return null
+    }
 
     const pe = parseFloat(json.PERatio)
     const beta = parseFloat(json.Beta)

@@ -253,7 +253,7 @@ export async function getSpxHistoricalPrices() {
   const cacheKey = 'ph_spx_comparison'
   const finnhubKey = import.meta.env.VITE_FINNHUB_KEY
 
-  // Try Finnhub with a 5-year window (within free tier limits)
+  // Primary: Finnhub (5-year window)
   if (finnhubKey) {
     const from = Math.floor(Date.now() / 1000) - 5 * 365 * 24 * 60 * 60
     const to = Math.floor(Date.now() / 1000)
@@ -265,13 +265,34 @@ export async function getSpxHistoricalPrices() {
       const data = await res.json()
       if (data.s !== 'ok' || !data.t?.length) throw new Error('no data')
       const prices = data.t.map((ts, i) => ({ date: ts * 1000, price: data.c[i] }))
-      if (prices.length > 0) compCacheSet(cacheKey, prices)
-      return prices
+      if (prices.length > 0) { compCacheSet(cacheKey, prices); return prices }
     } catch {}
   }
 
-  // Fallback: stale cache
-  return compCacheGet(cacheKey) ?? []
+  // Fallback: stale localStorage cache
+  const cached = compCacheGet(cacheKey)
+  if (cached?.length) return cached
+
+  // Last resort: stooq.com — free, no key, CORS-friendly
+  try {
+    const res = await fetch('https://stooq.com/q/d/l/?s=spy.us&i=d')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const text = await res.text()
+    const lines = text.trim().split('\n').slice(1) // skip header row
+    const prices = lines
+      .map(line => {
+        const cols = line.split(',')
+        const date = cols[0]
+        const close = parseFloat(cols[4])
+        if (!date || !isFinite(close)) return null
+        return { date: new Date(date + 'T00:00:00Z').getTime(), price: close }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.date - b.date)
+    if (prices.length > 0) { compCacheSet(cacheKey, prices); return prices }
+  } catch {}
+
+  return []
 }
 
 /**
