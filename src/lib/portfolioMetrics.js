@@ -6,45 +6,35 @@
 const RISK_FREE = 0.043 // US 5-year Treasury approximation
 
 /**
- * Fetch Alpha Vantage OVERVIEW for a stock ticker.
- * Results are cached in sessionStorage to respect the 25 req/day free tier.
+ * Fetch P/E and Beta for a stock ticker via Finnhub /stock/metric.
+ * Free tier: 60 req/min. Results cached in sessionStorage for the session.
  * Returns { pe: number|null, beta: number|null } or null on failure.
  */
 export async function fetchOverview(ticker) {
-  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY
+  const key = import.meta.env.VITE_FINNHUB_KEY
   if (!key) return null
 
-  const cacheKey = `av_overview_${ticker}`
+  const cacheKey = `fh_metric_${ticker}`
   try {
     const cached = sessionStorage.getItem(cacheKey)
-    if (cached === 'null') return null   // cached rate-limit response
     if (cached) return JSON.parse(cached)
   } catch {}
 
   try {
     const res = await fetch(
-      `https://www.alphavantage.co/query?function=OVERVIEW` +
-      `&symbol=${encodeURIComponent(ticker)}&apikey=${key}`
+      `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${key}`
     )
     if (!res.ok) return null
     const json = await res.json()
+    const m = json.metric
+    if (!m) return null
 
-    // Rate limit: AV returns {"Information": "Thank you for using Alpha Vantage..."}
-    // Cache as null so we don't retry and waste remaining quota
-    if (!json.Symbol) {
-      const isRateLimit = typeof json.Information === 'string' || typeof json.Note === 'string'
-      if (isRateLimit) {
-        try { sessionStorage.setItem(cacheKey, 'null') } catch {}
-      }
-      return null
-    }
+    // peTTM = trailing twelve months P/E; peNormalizedAnnual as fallback
+    const peRaw = m.peTTM ?? m.peBasicExclExtraTTM ?? m.peNormalizedAnnual ?? null
+    const pe = peRaw != null && isFinite(peRaw) ? peRaw : null
+    const beta = m.beta != null && isFinite(m.beta) ? m.beta : null
 
-    const pe = parseFloat(json.PERatio)
-    const beta = parseFloat(json.Beta)
-    const result = {
-      pe: isFinite(pe) ? pe : null,
-      beta: isFinite(beta) ? beta : null,
-    }
+    const result = { pe, beta }
     try { sessionStorage.setItem(cacheKey, JSON.stringify(result)) } catch {}
     return result
   } catch {

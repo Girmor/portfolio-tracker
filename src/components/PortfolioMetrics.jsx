@@ -211,7 +211,7 @@ export default function PortfolioMetrics({ positions, prices }) {
   function noData(reason) {
     const msgs = {
       noStocks: 'Лише для акцій',
-      apiLimit: 'Ліміт Alpha Vantage (25 запитів/день)',
+      apiLimit: 'Не вдалось отримати дані Finnhub',
       noBeta: 'Потрібен β (Beta)',
       noSpy: 'Не вдалось завантажити S&P 500',
       default: 'Недостатньо даних',
