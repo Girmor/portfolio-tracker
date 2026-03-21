@@ -1,4 +1,5 @@
 import { getCoinId } from './priceService'
+import { supabase } from './supabase'
 
 function cacheGet(key) {
   try {
@@ -13,6 +14,55 @@ function cacheSet(key, map) {
   try {
     localStorage.setItem(key, JSON.stringify({ entries: [...map] }))
   } catch {}
+}
+
+/**
+ * Batch-fetch historical prices via get-stock-history Edge Function (stooq.com).
+ * Returns Map of ticker → Map<'YYYY-MM-DD', number>.
+ */
+async function fetchHistoryBatch(symbols) {
+  const { data, error } = await supabase.functions.invoke('get-stock-history', {
+    body: { symbols },
+  })
+  if (error || !data?.prices) return {}
+
+  const result = {}
+  for (const [ticker, prices] of Object.entries(data.prices)) {
+    const map = new Map()
+    for (const [day, price] of Object.entries(prices)) {
+      map.set(day, price)
+    }
+    if (map.size > 0) result[ticker] = map
+  }
+  return result
+}
+
+// Tracks whether a batch fetch is in-flight to avoid duplicate calls
+let _batchPromise = null
+let _batchSymbols = []
+
+/**
+ * Queue a ticker for batch fetch via Edge Function.
+ * Groups all concurrent fetchStockHistory calls into a single batch request.
+ */
+function queueBatchFetch(ticker) {
+  _batchSymbols.push(ticker)
+  if (!_batchPromise) {
+    _batchPromise = new Promise(resolve => {
+      // Wait a microtask to collect all concurrent calls
+      queueMicrotask(async () => {
+        const symbols = [...new Set(_batchSymbols)]
+        _batchSymbols = []
+        _batchPromise = null
+        try {
+          resolve(await fetchHistoryBatch(symbols))
+        } catch {
+          resolve({})
+        }
+      })
+    })
+  }
+  return _batchPromise
 }
 
 /**
@@ -56,12 +106,20 @@ export async function fetchStockHistory(ticker, fromDate) {
   const cached = cacheGet(cacheKey)
   if (cached?.size > 0) return cached
 
-  // Try primary key, then fallback key
+  // Try Edge Function (stooq.com, no rate limits)
+  try {
+    const batch = await queueBatchFetch(ticker)
+    if (batch[ticker]?.size > 0) {
+      cacheSet(cacheKey, batch[ticker])
+      return batch[ticker]
+    }
+  } catch { /* fall through to Alpha Vantage */ }
+
+  // Fallback: Alpha Vantage (25 req/day per key)
   const keys = [
     import.meta.env.VITE_ALPHAVANTAGE_KEY,
     import.meta.env.VITE_ALPHAVANTAGE_KEY2,
   ].filter(Boolean)
-  if (!keys.length) return new Map()
 
   for (const key of keys) {
     try {
