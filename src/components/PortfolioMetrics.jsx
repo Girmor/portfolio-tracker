@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { getSpxHistoricalPrices } from '../lib/priceService'
 import {
-  fetchOverview,
+  fetchFundamentals,
   computePE,
   computeBeta,
   computeTWR,
@@ -152,30 +152,32 @@ export default function PortfolioMetrics({ positions, prices }) {
       )]
       const hasStocks = stockTickers.length > 0
 
-      const [overviewResults, spyResult] = await Promise.allSettled([
-        hasStocks
-          ? Promise.allSettled(stockTickers.map(t => fetchOverview(t).then(v => [t, v])))
-          : Promise.resolve([]),
-        getSpxHistoricalPrices(),
+      // Single edge-function call returns metrics + SPY prices (server-side, no CORS)
+      const [fundamentalsResult, spyFallbackResult] = await Promise.allSettled([
+        fetchFundamentals(stockTickers, true),
+        getSpxHistoricalPrices(), // localStorage cache or Finnhub direct as backup
       ])
 
       if (cancelled) return
 
       const overviewData = {}
       let overviewSucceeded = false
-      if (overviewResults.status === 'fulfilled') {
-        for (const r of overviewResults.value) {
-          if (r.status === 'fulfilled' && r.value) {
-            const [ticker, data] = r.value
-            if (data) { overviewData[ticker] = data; overviewSucceeded = true }
-          }
+      let spyPrices = []
+
+      if (fundamentalsResult.status === 'fulfilled') {
+        const { metrics, spyPrices: edgeSpyPrices } = fundamentalsResult.value
+        for (const [ticker, data] of Object.entries(metrics)) {
+          if (data) { overviewData[ticker] = data; overviewSucceeded = true }
         }
+        if (edgeSpyPrices?.length) spyPrices = edgeSpyPrices
       }
 
-      const spyPrices = spyResult.status === 'fulfilled' ? (spyResult.value ?? []) : []
-      const spyLoaded = spyPrices.length > 0
+      // Fallback: use directly-fetched SPY prices if edge function didn't return them
+      if (!spyPrices.length && spyFallbackResult.status === 'fulfilled') {
+        spyPrices = spyFallbackResult.value ?? []
+      }
 
-      console.debug('[PortfolioMetrics] stockTickers:', stockTickers, 'overviewData:', overviewData, 'spyPrices count:', spyPrices.length)
+      const spyLoaded = spyPrices.length > 0
 
       const pe = computePE(positions, prices, overviewData)
       const beta = computeBeta(positions, prices, overviewData)

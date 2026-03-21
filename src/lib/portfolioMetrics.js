@@ -1,46 +1,55 @@
 /**
  * Portfolio analytics: TWR, P/E, Beta, Sharpe, Sortino
- * All computations are client-side; uses Alpha Vantage OVERVIEW + SPY price history.
+ * P/E + Beta fetched via Supabase Edge Function (server-side Yahoo Finance proxy).
+ * SPY prices fetched via the same edge function using Finnhub server-side.
  */
+
+import { supabase } from './supabase.js'
 
 const RISK_FREE = 0.043 // US 5-year Treasury approximation
 
+const SESSION_KEY = 'fundamentals_cache'
+
+function readCache() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}') } catch { return {} }
+}
+function writeCache(data) {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(data)) } catch {}
+}
+
 /**
- * Fetch P/E and Beta for a stock ticker via Yahoo Finance quoteSummary.
- * No API key required. Results cached in sessionStorage for the session.
- * Returns { pe: number|null, beta: number|null } or null on failure.
+ * Fetch P/E + Beta for multiple stock tickers and optionally SPY history
+ * via the get-fundamentals Supabase Edge Function.
+ * Results are sessionStorage-cached.
+ *
+ * @param {string[]} tickers
+ * @param {boolean} includeSpy
+ * @returns {Promise<{ metrics: Object, spyPrices: Array }>}
  */
-export async function fetchOverview(ticker) {
-  const cacheKey = `yf_metric_${ticker}`
-  try {
-    const cached = sessionStorage.getItem(cacheKey)
-    if (cached) return JSON.parse(cached)
-  } catch {}
+export async function fetchFundamentals(tickers, includeSpy = false) {
+  const cache = readCache()
 
-  try {
-    const res = await fetch(
-      `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}` +
-      `?modules=defaultKeyStatistics,summaryDetail`
-    )
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json = await res.json()
-    const r = json.quoteSummary?.result?.[0]
-    if (!r) return null
+  // Find tickers not yet cached
+  const uncached = tickers.filter(t => !(t in cache))
 
-    const ks = r.defaultKeyStatistics
-    const sd = r.summaryDetail
-
-    const peRaw = sd?.trailingPE?.raw ?? ks?.forwardPE?.raw ?? null
-    const pe = peRaw != null && isFinite(peRaw) ? peRaw : null
-    const betaRaw = ks?.beta?.raw ?? null
-    const beta = betaRaw != null && isFinite(betaRaw) ? betaRaw : null
-
-    const result = { pe, beta }
-    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)) } catch {}
-    return result
-  } catch {
-    return null
+  if (uncached.length > 0 || includeSpy) {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-fundamentals', {
+        body: { tickers: uncached, includeSpy },
+      })
+      if (!error && data) {
+        // Merge metrics into cache
+        Object.assign(cache, data.metrics ?? {})
+        writeCache(cache)
+        return {
+          metrics: { ...cache },
+          spyPrices: data.spyPrices ?? [],
+        }
+      }
+    } catch {}
   }
+
+  return { metrics: cache, spyPrices: [] }
 }
 
 /**
