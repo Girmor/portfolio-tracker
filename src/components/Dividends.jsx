@@ -109,44 +109,89 @@ function ForecastTab({ dividends }) {
         </p>
       </div>
 
-      {/* Per-ticker breakdown */}
-      <div className="glass-card rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="py-3 px-4 text-left font-medium text-slate-400">Тікер</th>
-              <th className="py-3 px-4 text-left font-medium text-slate-400">Частота</th>
-              <th className="py-3 px-4 text-right font-medium text-slate-400">Середня виплата</th>
-              <th className="py-3 px-4 text-right font-medium text-slate-400">Прогноз / рік</th>
-              <th className="py-3 px-4 text-right font-medium text-slate-400">%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {perTicker.map(t => {
-              const annual = t.forecastEvents.reduce((s, e) => s + e.amount, 0)
-              const pct = forward12M > 0 ? (annual / forward12M * 100).toFixed(1) : '0'
-              return (
-                <tr key={t.ticker} className="border-b border-white/[0.06] hover:bg-white/5">
-                  <td className="py-3 px-4 font-medium text-white">{t.ticker}</td>
-                  <td className="py-3 px-4 text-slate-300">{t.freqLabel}</td>
-                  <td className="py-3 px-4 text-right text-slate-300">
-                    {t.frequency === 'unknown' ? '—' : formatMoney(t.avgPayment)}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    {t.frequency === 'unknown'
-                      ? <span className="text-slate-500">Недостатньо даних</span>
-                      : <span className="text-indigo-400 font-medium">{formatMoney(annual)}</span>
-                    }
-                  </td>
-                  <td className="py-3 px-4 text-right text-slate-400">
-                    {t.frequency === 'unknown' ? '—' : `${pct}%`}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* Per-ticker + Growth chart side by side */}
+      {(() => {
+        // Build last-3-years growth data
+        const currentYear = new Date().getFullYear()
+        const years = [currentYear - 2, currentYear - 1, currentYear]
+        const YEAR_COLORS = { [years[0]]: '#F59E0B', [years[1]]: '#22d3ee', [years[2]]: '#a78bfa' }
+
+        const growthData = MONTHS.map((name, mi) => {
+          const row = { name }
+          years.forEach(y => {
+            row[y] = dividends
+              .filter(d => new Date(d.date).getFullYear() === y && new Date(d.date).getMonth() === mi)
+              .reduce((s, d) => s + Number(d.amount), 0)
+          })
+          return row
+        })
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Per-ticker breakdown */}
+            <div className="glass-card rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5">
+                    <th className="py-3 px-4 text-left font-medium text-slate-400">Тікер</th>
+                    <th className="py-3 px-4 text-left font-medium text-slate-400">Частота</th>
+                    <th className="py-3 px-4 text-right font-medium text-slate-400">Середня виплата</th>
+                    <th className="py-3 px-4 text-right font-medium text-slate-400">Прогноз / рік</th>
+                    <th className="py-3 px-4 text-right font-medium text-slate-400">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perTicker.map(t => {
+                    const annual = t.forecastEvents.reduce((s, e) => s + e.amount, 0)
+                    const pct = forward12M > 0 ? (annual / forward12M * 100).toFixed(1) : '0'
+                    return (
+                      <tr key={t.ticker} className="border-b border-white/[0.06] hover:bg-white/5">
+                        <td className="py-3 px-4 font-medium text-white">{t.ticker}</td>
+                        <td className="py-3 px-4 text-slate-300">{t.freqLabel}</td>
+                        <td className="py-3 px-4 text-right text-slate-300">
+                          {t.frequency === 'unknown' ? '—' : formatMoney(t.avgPayment)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {t.frequency === 'unknown'
+                            ? <span className="text-slate-500">Недостатньо даних</span>
+                            : <span className="text-indigo-400 font-medium">{formatMoney(annual)}</span>
+                          }
+                        </td>
+                        <td className="py-3 px-4 text-right text-slate-400">
+                          {t.frequency === 'unknown' ? '—' : `${pct}%`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Year-over-year growth chart */}
+            <div className="glass-card rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-200 mb-4">Ріст дивідендів</h3>
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={growthData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `$${v}`} />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(value, name) => [`${formatMoney(value)}`, name]}
+                      labelFormatter={label => <span style={{ fontWeight: 600 }}>{label}</span>}
+                    />
+                    <Legend formatter={value => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{value}</span>} />
+                    {years.map(y => (
+                      <Bar key={y} dataKey={y} name={String(y)} fill={YEAR_COLORS[y]} radius={[3, 3, 0, 0]} maxBarSize={20} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
