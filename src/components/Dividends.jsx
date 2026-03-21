@@ -452,15 +452,12 @@ export default function Dividends() {
                   <Tooltip
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     formatter={(v) => [formatMoney(v), 'Дивіденди']}
-                    labelFormatter={(label, payload) => {
-                      if (payload?.[0]) {
-                        const idx = MONTHS.indexOf(label)
-                        return idx >= 0 ? MONTHS_FULL[idx] : label
-                      }
-                      return label
+                    labelFormatter={(label) => {
+                      const idx = MONTHS.indexOf(label)
+                      const name = idx >= 0 ? MONTHS_FULL[idx] : label
+                      return <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{name}</span>
                     }}
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: '#e2e8f0', fontWeight: 600 }}
                   />
                   <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={48}>
                     {monthlyData.map((entry, i) => (
