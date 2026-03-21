@@ -163,6 +163,8 @@ export default function PortfolioMetrics({ positions, prices }) {
       )]
       const activeTickers = [...new Set(activePositions.map(p => p.ticker))]
 
+      console.log('[metrics] active:', activeTickers, 'stocks:', stockTickers)
+
       // Fetch overviews (throttled), SPY map, and active ticker histories in parallel
       const [overviewResult, spyResult, historiesResult] = await Promise.allSettled([
         fetchOverviewAll(stockTickers),
@@ -191,10 +193,13 @@ export default function PortfolioMetrics({ positions, prices }) {
         }
       }
 
+      console.log('[metrics] SPY size:', spyMapRaw?.size ?? 0, 'histories:', Object.fromEntries(Object.entries(histories).map(([t, m]) => [t, m.size])), 'overview:', overviewData)
+
       // Compute metrics
       const pe = computePE(positions, prices, overviewData)
       const beta = computeBeta(positions, prices, histories, spyMapRaw || new Map())
       const { twr, annualizedReturn, startDate } = computeTWR(positions, prices)
+      console.log('[metrics] beta:', beta, 'pe:', pe, 'twr:', twr, 'annualized:', annualizedReturn)
 
       // SPY period return for TWR comparison
       let spyPeriodReturn = null
