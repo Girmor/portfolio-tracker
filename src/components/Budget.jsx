@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { formatMoney } from '../lib/formatters'
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine, LabelList } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   useBudgetQuery,
@@ -785,7 +785,7 @@ export default function Budget() {
               })()}
               <div className="[&_.recharts-wrapper]:!bg-transparent [&_.recharts-surface]:!bg-transparent" style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <BarChart data={chartData} margin={{ top: 22, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.07)" />
                     <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
                     <YAxis width={60} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => {
@@ -794,9 +794,15 @@ export default function Budget() {
                     }} />
                     <Tooltip formatter={(v, name) => [formatMoney(v, activeCurrency), name]} contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                     <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                    <Bar dataKey="Доходи"     fill="#10b981" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Доходи'     ? 1 : 0.15} />
-                    <Bar dataKey="Витрати"    fill="#f97316" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Витрати'    ? 1 : 0.15} />
-                    <Bar dataKey="Інвестиції" fill="#8b5cf6" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Інвестиції' ? 1 : 0.15} />
+                    <Bar dataKey="Доходи"     fill="#10b981" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Доходи'     ? 1 : 0.15}>
+                      <LabelList dataKey="Доходи"     position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v > 0 ? (chartCurrency === 'usd' ? `$${Math.round(v)}` : `${(v/1000).toFixed(0)}к`) : ''} />
+                    </Bar>
+                    <Bar dataKey="Витрати"    fill="#f97316" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Витрати'    ? 1 : 0.15}>
+                      <LabelList dataKey="Витрати"    position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v > 0 ? (chartCurrency === 'usd' ? `$${Math.round(v)}` : `${(v/1000).toFixed(0)}к`) : ''} />
+                    </Bar>
+                    <Bar dataKey="Інвестиції" fill="#8b5cf6" radius={[3,3,0,0]} maxBarSize={24} opacity={activeSeries === null || activeSeries === 'Інвестиції' ? 1 : 0.15}>
+                      <LabelList dataKey="Інвестиції" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v > 0 ? (chartCurrency === 'usd' ? `$${Math.round(v)}` : `${(v/1000).toFixed(0)}к`) : ''} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
