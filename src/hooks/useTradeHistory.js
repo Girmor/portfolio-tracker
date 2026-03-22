@@ -194,7 +194,7 @@ export function useTradeHistory(positions) {
         dateStr: new Date(day + 'T00:00:00Z').toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' }),
         day,
         value: totalValue,
-        cost: totalCost,
+        cost: totalBuyCostAll,
         pnl,
         pnlPercent: isFinite(pnlPercent) ? pnlPercent : 0,
       }
