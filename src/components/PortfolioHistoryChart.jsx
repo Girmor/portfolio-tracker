@@ -91,15 +91,25 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, bud
 
   const chartData = useMemo(() => {
     const periodObj = PERIODS.find(p => p.key === period)
-    const filtered = !periodObj?.days
+    let filtered = !periodObj?.days
       ? allPoints
       : allPoints.filter(p => p.date >= Date.now() - periodObj.days * 24 * 60 * 60 * 1000)
+
+    // Overview: aggregate daily points to monthly (last day of each month)
+    if (portfolioId === null && filtered.length > 0) {
+      const byMonth = new Map()
+      for (const p of filtered) {
+        const month = (p.day || new Date(p.date).toISOString().split('T')[0]).slice(0, 7)
+        byMonth.set(month, p) // last point wins (points are sorted by date)
+      }
+      filtered = [...byMonth.values()]
+    }
 
     // Add budget to value when showing overview (portfolioId null) and budget exists
     if (portfolioId !== null || !budgetMonthsSorted.length) return filtered
 
     return filtered.map(p => {
-      const pointMonth = new Date(p.date).toISOString().slice(0, 7)
+      const pointMonth = (p.day || new Date(p.date).toISOString().split('T')[0]).slice(0, 7)
       // find most recent budget month <= pointMonth
       let best = null
       for (const m of budgetMonthsSorted) {
@@ -187,8 +197,8 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, bud
             </button>
           </div>
 
-          {/* Period selector */}
-          <div className="flex bg-white/8 rounded-lg p-0.5">
+          {/* Period selector (hide for overview — monthly data) */}
+          {portfolioId !== null && <div className="flex bg-white/8 rounded-lg p-0.5">
             {PERIODS.map(p => (
               <button
                 key={p.key}
@@ -200,7 +210,7 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, bud
                 {p.label}
               </button>
             ))}
-          </div>
+          </div>}
         </div>
       </div>
 
