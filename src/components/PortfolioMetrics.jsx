@@ -158,16 +158,11 @@ export default function PortfolioMetrics({ positions, prices }) {
       }
 
       const activePositions = positions.filter(p => calcQtyLocal(p) > 0)
-      const stockTickers = [...new Set(
-        activePositions.filter(p => p.type === 'stock').map(p => p.ticker)
-      )]
       const activeTickers = [...new Set(activePositions.map(p => p.ticker))]
 
-      console.log('[metrics] active:', activeTickers, 'stocks:', stockTickers)
-
-      // Fetch overviews (throttled), SPY map, and active ticker histories in parallel
+      // Fetch overviews, SPY map, and active ticker histories in parallel
       const [overviewResult, spyResult, historiesResult] = await Promise.allSettled([
-        fetchOverviewAll(stockTickers),
+        fetchOverviewAll(activeTickers),
         fetchStockHistory('SPY'),
         Promise.allSettled(activeTickers.map(t => fetchStockHistory(t).then(m => [t, m]))),
       ])
@@ -193,14 +188,10 @@ export default function PortfolioMetrics({ positions, prices }) {
         }
       }
 
-      console.log('[metrics] SPY size:', spyMapRaw?.size ?? 0, 'histories:', Object.fromEntries(Object.entries(histories).map(([t, m]) => [t, m.size])), 'overview:', overviewData)
-
       // Compute metrics
       const pe = computePE(positions, prices, overviewData)
       const beta = computeBeta(positions, prices, histories, spyMapRaw || new Map())
       const { twr, annualizedReturn, startDate } = computeTWR(positions, prices)
-      console.log('[metrics] beta:', beta, 'pe:', pe, 'twr:', twr, 'annualized:', annualizedReturn)
-
       // SPY period return for TWR comparison
       let spyPeriodReturn = null
       if (spyPrices.length && startDate) {
@@ -281,9 +272,9 @@ export default function PortfolioMetrics({ positions, prices }) {
 
         {/* P/E */}
         <MetricCard
-          title="P/E (Ціна / Прибуток)"
-          subtitle="Зважений по ринковій вартості"
-          tooltipText="Price-to-Earnings — відношення ціни акції до прибутку на акцію. Зважений середній по всіх акціях портфеля. Низький P/E може означати недооцінену компанію, високий — переоціненість або швидке зростання. Крипто не враховується."
+          title="P/E портфеля акцій"
+          subtitle="Відношення вартості акцій до прибутку компаній"
+          tooltipText="Середньозважений показник P/E (price-to-earnings) портфеля акцій. Розраховується тільки по акціях та ETF, що мають коректне значення P/E. Крипто, облігації, кеш — не враховуються."
           loading={loading}
         >
           {m?.pe != null ? (

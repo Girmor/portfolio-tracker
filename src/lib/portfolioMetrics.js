@@ -3,12 +3,13 @@
  *
  * Beta — computed from daily price history (ticker vs SPY). Works for both
  *        stocks and ETFs. No external API required beyond what's already cached.
- * P/E  — Alpha Vantage OVERVIEW, throttled (≤5/min), sessionStorage cached.
- *        Only for individual stocks; ETFs return null gracefully.
- * SPY  — fetchStockHistory('SPY') via Alpha Vantage, localStorage cached.
+ * P/E  — Yahoo Finance via Edge Function (works for stocks AND ETFs), localStorage cached.
+ *        Falls back to Alpha Vantage OVERVIEW for stocks.
+ * SPY  — fetchStockHistory('SPY') via stooq Edge Function, localStorage cached.
  */
 
 import { fetchStockHistory } from './historicalPrices.js'
+import { supabase } from './supabase.js'
 
 const RISK_FREE = 0.043 // US 5-year Treasury approximation
 
@@ -33,65 +34,62 @@ export async function fetchSpyPrices() {
 }
 
 // ---------------------------------------------------------------------------
-// P/E via Alpha Vantage OVERVIEW (stocks only, throttled, sessionStorage cached)
+// P/E via Yahoo Finance Edge Function (stocks + ETFs), localStorage cached
 // ---------------------------------------------------------------------------
 
-/**
- * Fetch P/E and Beta for a single stock ticker from Alpha Vantage OVERVIEW.
- * Uses VITE_ALPHAVANTAGE_KEY2 (dedicated metrics key) with sessionStorage cache.
- * Returns { pe, beta } or null if unavailable (ETF, rate-limited, etc.).
- */
-export async function fetchOverview(ticker) {
-  const key = import.meta.env.VITE_ALPHAVANTAGE_KEY2 || import.meta.env.VITE_ALPHAVANTAGE_KEY
-  if (!key) return null
+const PE_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
 
-  const cacheKey = `av2_overview_${ticker}`
+function getPECache(ticker) {
   try {
-    const cached = sessionStorage.getItem(cacheKey)
-    if (cached && cached !== 'null') return JSON.parse(cached)
+    const raw = localStorage.getItem(`pe_${ticker}`)
+    if (!raw) return null
+    const { pe, ts } = JSON.parse(raw)
+    if (Date.now() - ts > PE_CACHE_TTL) return null
+    return { pe }
+  } catch { return null }
+}
+
+function setPECache(ticker, pe) {
+  try {
+    localStorage.setItem(`pe_${ticker}`, JSON.stringify({ pe, ts: Date.now() }))
   } catch {}
-
-  try {
-    const res = await fetch(
-      `https://www.alphavantage.co/query?function=OVERVIEW` +
-      `&symbol=${encodeURIComponent(ticker)}&apikey=${key}`
-    )
-    if (!res.ok) return null
-    const json = await res.json()
-    if (!json.Symbol) return null  // ETF, rate-limited, or invalid ticker
-
-    const pe = parseFloat(json.PERatio)
-    const beta = parseFloat(json.Beta)
-    const result = {
-      pe: isFinite(pe) && pe > 0 ? pe : null,
-      beta: isFinite(beta) ? beta : null,
-    }
-    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)) } catch {}
-    return result
-  } catch {
-    return null
-  }
 }
 
 /**
- * Fetch OVERVIEW for multiple tickers, throttled to ≤5 calls/minute.
- * Returns map of ticker → { pe, beta }.
+ * Fetch P/E for multiple tickers via get-stock-overview Edge Function (Yahoo Finance).
+ * Returns map of ticker → { pe }.
  */
 export async function fetchOverviewAll(tickers) {
-  const result = {}
-  const BATCH = 5
-  const DELAY = 13000 // 13s between batches → stays under 5/min
+  if (!tickers?.length) return {}
 
-  for (let i = 0; i < tickers.length; i += BATCH) {
-    const batch = tickers.slice(i, i + BATCH)
-    const responses = await Promise.all(batch.map(t => fetchOverview(t).then(v => [t, v])))
-    for (const [ticker, data] of responses) {
-      if (data) result[ticker] = data
-    }
-    if (i + BATCH < tickers.length) {
-      await new Promise(r => setTimeout(r, DELAY))
+  const result = {}
+  const toFetch = []
+
+  // Check localStorage cache first
+  for (const ticker of tickers) {
+    const cached = getPECache(ticker)
+    if (cached) {
+      result[ticker] = cached
+    } else {
+      toFetch.push(ticker)
     }
   }
+
+  if (toFetch.length === 0) return result
+
+  // Fetch from Edge Function (Yahoo Finance, no rate limits)
+  try {
+    const { data, error } = await supabase.functions.invoke('get-stock-overview', {
+      body: { symbols: toFetch },
+    })
+    if (!error && data?.data) {
+      for (const [ticker, info] of Object.entries(data.data)) {
+        const entry = { pe: info.pe ?? null }
+        setPECache(ticker, entry.pe)
+        result[ticker] = entry
+      }
+    }
+  } catch { /* fall through */ }
 
   return result
 }
@@ -169,7 +167,7 @@ export function computePE(positions, prices, overviewData) {
   let totalWeight = 0
 
   for (const pos of positions) {
-    if (pos.type !== 'stock') continue
+    if (pos.type === 'crypto') continue // crypto has no P/E
     const qty = calcQty(pos)
     if (qty <= 0) continue
     const price = prices[pos.ticker]
