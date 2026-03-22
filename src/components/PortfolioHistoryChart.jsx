@@ -108,6 +108,13 @@ function PortfolioHistoryChart({ portfolioId, positions, currentPrices = {}, bud
     // Add budget to value when showing overview (portfolioId null) and budget exists
     if (portfolioId !== null || !budgetMonthsSorted.length) return filtered
 
+    // Start chart from the first month with budget data
+    const firstBudgetMonth = budgetMonthsSorted[0]
+    filtered = filtered.filter(p => {
+      const month = (p.day || new Date(p.date).toISOString().split('T')[0]).slice(0, 7)
+      return month >= firstBudgetMonth
+    })
+
     return filtered.map(p => {
       const pointMonth = (p.day || new Date(p.date).toISOString().split('T')[0]).slice(0, 7)
       // find most recent budget month <= pointMonth
