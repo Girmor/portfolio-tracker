@@ -43,7 +43,7 @@ export default function Overview() {
       else { totalSellQty += qty; totalSellProceeds += price * qty }
     })
     const avgPrice = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0
-    const remainingQty = totalBuyQty - totalSellQty
+    const remainingQty = Math.max(0, totalBuyQty - totalSellQty)
     const investedRemaining = avgPrice * remainingQty
     const currentPrice = prices[pos.ticker] ?? 0
     const value = remainingQty * currentPrice
