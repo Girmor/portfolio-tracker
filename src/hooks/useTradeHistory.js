@@ -137,12 +137,14 @@ export function useTradeHistory(positions) {
 
     return allDays.map(day => {
       let totalValue = 0
-      let totalCost = 0
+      let totalBuyCostAll = 0
+      let totalSellProceeds = 0
 
       for (const { ticker, isCrypto, trades } of posTradesSorted) {
         let totalBuyQty = 0
         let totalBuyCost = 0
         let totalSellQty = 0
+        let sellProceeds = 0
 
         for (const t of trades) {
           const d = t.date?.split('T')[0]
@@ -154,14 +156,20 @@ export function useTradeHistory(positions) {
             totalBuyCost += p * q
           } else {
             totalSellQty += q
+            sellProceeds += p * q
           }
         }
 
+        // No trades yet for this day
+        if (totalBuyQty === 0 && totalSellQty === 0) continue
+
+        totalBuyCostAll += totalBuyCost
+        totalSellProceeds += sellProceeds
+
         const qty = totalBuyQty - totalSellQty
-        if (qty <= 0) continue
+        if (qty <= 0) continue // fully sold — cost and proceeds already counted
 
         const avgPrice = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0
-        const cost = avgPrice * qty
         const price = priceMaps.get(ticker)?.filled.get(day) ?? null
 
         let effectivePrice
@@ -175,11 +183,11 @@ export function useTradeHistory(positions) {
 
         if (effectivePrice <= 0) continue
         totalValue += qty * effectivePrice
-        totalCost += cost
       }
 
-      const pnl = totalValue - totalCost
-      const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0
+      // Total P&L = (current market value + sell proceeds) - total buy cost
+      const pnl = (totalValue + totalSellProceeds) - totalBuyCostAll
+      const pnlPercent = totalBuyCostAll > 0 ? (pnl / totalBuyCostAll) * 100 : 0
 
       return {
         date: new Date(day + 'T00:00:00Z').getTime(),
