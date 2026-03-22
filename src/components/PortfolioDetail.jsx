@@ -240,6 +240,7 @@ export default function PortfolioDetail() {
   const totalCost = useMemo(() => activePositions.reduce((sum, { calc }) => sum + calc.totalCost, 0), [activePositions])
   const totalUnrealizedPnl = useMemo(() => activePositions.reduce((sum, { calc }) => sum + calc.unrealizedPnl, 0), [activePositions])
   const totalRealizedPnl = useMemo(() => posCalcs.reduce((sum, { calc }) => sum + calc.realizedPnl, 0), [posCalcs])
+  const totalBuyCostAll = useMemo(() => posCalcs.reduce((sum, { calc }) => sum + (calc.totalBuyCost || 0), 0), [posCalcs])
   const unrealizedPnlPercent = totalCost > 0 ? (totalUnrealizedPnl / totalCost) * 100 : 0
   const soldTotalRealizedPnl = useMemo(() => soldPositions.reduce((sum, { calc }) => sum + calc.realizedPnl, 0), [soldPositions])
 
@@ -419,7 +420,7 @@ export default function PortfolioDetail() {
             <div className="text-xl font-bold text-white">{formatMoney(totalCost)}</div>
             {(() => {
               const totalPnl = totalUnrealizedPnl + totalRealizedPnl
-              const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
+              const totalPnlPercent = totalBuyCostAll > 0 ? (totalPnl / totalBuyCostAll) * 100 : 0
               return (
                 <div className={`text-xs mt-1.5 ${pnlColor(totalPnl)}`}>
                   P&L: {formatMoney(totalPnl)} ({formatPercent(totalPnlPercent)})
