@@ -417,9 +417,15 @@ export default function PortfolioDetail() {
           <div className="glass-card rounded-xl p-4">
             <div className="text-xs text-slate-400 mb-1">Інвестовано</div>
             <div className="text-xl font-bold text-white">{formatMoney(totalCost)}</div>
-            <div className={`text-xs mt-1.5 ${pnlColor(totalUnrealizedPnl)}`}>
-              P&L: {formatMoney(totalUnrealizedPnl)} ({formatPercent(unrealizedPnlPercent)})
-            </div>
+            {(() => {
+              const totalPnl = totalUnrealizedPnl + totalRealizedPnl
+              const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
+              return (
+                <div className={`text-xs mt-1.5 ${pnlColor(totalPnl)}`}>
+                  P&L: {formatMoney(totalPnl)} ({formatPercent(totalPnlPercent)})
+                </div>
+              )
+            })()}
           </div>
 
           <div className="glass-card rounded-xl p-4">
