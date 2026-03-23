@@ -53,7 +53,8 @@ export default function Overview() {
   }
 
   function calcPortfolioValue(p) {
-    return (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).value, 0)
+    const positionsValue = (p.positions || []).reduce((sum, pos) => sum + calcPositionValue(pos).value, 0)
+    return positionsValue + (Number(p.cash_balance) || 0)
   }
 
   const currentMonthKey = currentMonth()
